@@ -5,8 +5,11 @@ import type { Logger } from "pino";
 
 import { AppError, AuthenticationError } from "../core/shared/errors.js";
 import type { MediaKind, MediaRecord } from "../core/media/types.js";
+import type { SearchResultItem } from "../core/search/types.js";
 import { mediaLookupQuerySchema } from "../application/lookup/media-lookup-schemas.js";
 import type { MediaLookupService } from "../application/lookup/media-lookup-service.js";
+import { mediaSearchQuerySchema } from "../application/search/media-search-schemas.js";
+import type { MediaSearchService } from "../application/search/media-search-service.js";
 import type { MediaSnapshotStorePort } from "../ports/storage/media-snapshot-store-port.js";
 import { createOpenApiDocument } from "./create-openapi-document.js";
 
@@ -18,6 +21,7 @@ type RequestContext = {
 export function createApp(args: {
   logger: Logger;
   mediaLookupService: MediaLookupService;
+  mediaSearchService: MediaSearchService;
   snapshotStore: MediaSnapshotStorePort;
   requestBodyLimitBytes: number;
 }) {
@@ -55,6 +59,36 @@ export function createApp(args: {
 
   app.get("/api/v1/media/movie", handleMediaLookup("movie"));
   app.get("/api/v1/media/tv", handleMediaLookup("tv"));
+  app.get("/api/v1/media/search", async (req, res, next) => {
+    try {
+      const token = extractBearerToken(req);
+      const query = mediaSearchQuerySchema.parse(req.query);
+      const result = await args.mediaSearchService.execute({
+        token,
+        route: req.path,
+        query
+      });
+
+      setRequestContext(res, { tenantId: result.tenantId });
+
+      res.status(200).json({
+        data: {
+          items: result.items.map((item) => serializeSearchItem(item)),
+          page: result.page,
+          pageSize: result.pageSize,
+          ...(result.total !== undefined ? { total: result.total } : {})
+        },
+        meta: {
+          requestId: getRequestContext(res).requestId,
+          tenantId: result.tenantId,
+          source: result.source,
+          stale: result.stale
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const requestContext = getRequestContext(res);
@@ -108,15 +142,7 @@ export function createApp(args: {
   function handleMediaLookup(kind: MediaKind) {
     return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
       try {
-        const authorization = req.header("authorization");
-        const token = authorization?.startsWith("Bearer ")
-          ? authorization.slice("Bearer ".length)
-          : undefined;
-
-        if (token === undefined || token.length === 0) {
-          throw new AuthenticationError();
-        }
-
+        const token = extractBearerToken(req);
         const query = mediaLookupQuerySchema.parse(req.query);
         const result = await args.mediaLookupService.execute({
           kind,
@@ -141,6 +167,19 @@ export function createApp(args: {
       }
     };
   }
+}
+
+function extractBearerToken(req: express.Request): string {
+  const authorization = req.header("authorization");
+  const token = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : undefined;
+
+  if (token === undefined || token.length === 0) {
+    throw new AuthenticationError();
+  }
+
+  return token;
 }
 
 function getRequestContext(res: express.Response): RequestContext {
@@ -183,5 +222,26 @@ function serializeRecord(record: MediaRecord) {
     seasonCount: record.seasonCount,
     episodeCount: record.episodeCount,
     status: record.status
+  };
+}
+
+function serializeSearchItem(item: SearchResultItem) {
+  return {
+    mediaId: item.mediaId,
+    kind: item.kind,
+    title: item.title,
+    originalTitle: item.originalTitle,
+    description: item.description,
+    releaseDate: item.releaseDate,
+    releaseYear: item.releaseYear,
+    firstAirDate: item.firstAirDate,
+    firstAirYear: item.firstAirYear,
+    rating: item.rating,
+    genres: item.genres,
+    images: item.images,
+    identifiers: {
+      tmdbId: item.identifiers.tmdbId,
+      imdbId: item.identifiers.imdbId
+    }
   };
 }

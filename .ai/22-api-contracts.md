@@ -12,7 +12,7 @@
 
 - `Confirmed`: `GET /api/v1/media/movie`
 - `Confirmed`: `GET /api/v1/media/tv`
-- `Proposed`: `GET /api/v1/media/search`
+- `Confirmed`: `GET /api/v1/media/search`
 
 ## Operational Endpoints
 
@@ -34,6 +34,7 @@
 ## Search Rules
 
 - `Confirmed`: Parameters are `q`, `kind?`, `lang?`, `page?`, `pageSize?`.
+- `Confirmed`: Omitted `kind` searches across movie and TV only.
 - `Confirmed`: Search first checks cached query snapshots.
 - `Confirmed`: Local index may accelerate results only for previously fetched records.
 

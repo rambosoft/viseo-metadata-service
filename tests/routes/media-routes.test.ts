@@ -9,6 +9,7 @@ import { RedisRateLimiter } from "../../src/adapters/rate-limit/redis-rate-limit
 import { RedisKeyBuilder } from "../../src/adapters/redis-store/redis-key-builder.js";
 import { RedisMediaSnapshotStore } from "../../src/adapters/redis-store/redis-media-snapshot-store.js";
 import { MediaLookupService } from "../../src/application/lookup/media-lookup-service.js";
+import { MediaSearchService } from "../../src/application/search/media-search-service.js";
 import { createApp } from "../../src/bootstrap/create-app.js";
 import { createLogger } from "../../src/bootstrap/logger.js";
 import type { ClockPort } from "../../src/ports/shared/clock-port.js";
@@ -25,7 +26,7 @@ function createTestApp(
 ) {
   const redis = new Redis();
   const keyBuilder = new RedisKeyBuilder(`md_${Math.random().toString(16).slice(2)}`);
-  const snapshotStore = new RedisMediaSnapshotStore(redis as never, keyBuilder, 3600);
+  const snapshotStore = new RedisMediaSnapshotStore(redis as never, keyBuilder, 3600, 900, 21600);
   const auth = new HttpAuthValidationAdapter(
     fetchImpl,
     redis as never,
@@ -61,10 +62,19 @@ function createTestApp(
     provider,
     rateLimiter
   );
+  const searchService = new MediaSearchService(
+    auth,
+    snapshotStore,
+    provider,
+    rateLimiter,
+    fixedClock,
+    900
+  );
   return {
     app: createApp({
       logger: createLogger("info"),
       mediaLookupService: service,
+      mediaSearchService: searchService,
       snapshotStore,
       requestBodyLimitBytes: 16384
     }),
@@ -136,6 +146,88 @@ function createFetchStub() {
       );
     }
 
+    if (url.includes("/search/movie")) {
+      return new Response(
+        JSON.stringify({
+          page: 1,
+          total_results: 1,
+          results: [
+            {
+              id: 550,
+              title: "Fight Club",
+              original_title: "Fight Club",
+              overview: "Movie search result",
+              release_date: "1999-10-15",
+              vote_average: 8.4,
+              genre_ids: [18],
+              poster_path: "/fight.jpg",
+              backdrop_path: "/fight-backdrop.jpg"
+            }
+          ]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+
+    if (url.includes("/search/tv")) {
+      return new Response(
+        JSON.stringify({
+          page: 1,
+          total_results: 1,
+          results: [
+            {
+              id: 1396,
+              name: "Breaking Bad",
+              original_name: "Breaking Bad",
+              overview: "TV search result",
+              first_air_date: "2008-01-20",
+              vote_average: 8.9,
+              genre_ids: [18],
+              poster_path: "/bb.jpg",
+              backdrop_path: "/bb-backdrop.jpg"
+            }
+          ]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+
+    if (url.includes("/search/multi")) {
+      return new Response(
+        JSON.stringify({
+          page: 1,
+          total_results: 2,
+          results: [
+            {
+              media_type: "movie",
+              id: 550,
+              title: "Fight Club",
+              original_title: "Fight Club",
+              overview: "Movie search result",
+              release_date: "1999-10-15",
+              vote_average: 8.4,
+              genre_ids: [18],
+              poster_path: "/fight.jpg",
+              backdrop_path: "/fight-backdrop.jpg"
+            },
+            {
+              media_type: "tv",
+              id: 1396,
+              name: "Breaking Bad",
+              original_name: "Breaking Bad",
+              overview: "TV search result",
+              first_air_date: "2008-01-20",
+              vote_average: 8.9,
+              genre_ids: [18],
+              poster_path: "/bb.jpg",
+              backdrop_path: "/bb-backdrop.jpg"
+            }
+          ]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+
     return new Response("{}", { status: 404 });
   });
 }
@@ -191,6 +283,7 @@ describe("media routes", () => {
     expect(response.body.openapi).toBe("3.1.0");
     expect(response.body.paths["/api/v1/media/movie"]).toBeDefined();
     expect(response.body.paths["/api/v1/media/tv"]).toBeDefined();
+    expect(response.body.paths["/api/v1/media/search"]).toBeDefined();
   });
 
   it("returns 401 for invalid token", async () => {
@@ -241,6 +334,81 @@ describe("media routes", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("returns provider-backed search results", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    const response = await request(app)
+      .get("/api/v1/media/search?q=fight")
+      .set("Authorization", "Bearer token")
+      .expect(200);
+
+    expect(response.body.meta.source).toBe("provider");
+    expect(response.body.data.items).toHaveLength(2);
+  });
+
+  it("returns cached search results on repeat query", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    await request(app)
+      .get("/api/v1/media/search?q=fight")
+      .set("Authorization", "Bearer token")
+      .expect(200);
+    const second = await request(app)
+      .get("/api/v1/media/search?q=fight")
+      .set("Authorization", "Bearer token")
+      .expect(200);
+
+    expect(second.body.meta.source).toBe("cache");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("serves search results from the local index when lookup snapshots already exist", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    await request(app)
+      .get("/api/v1/media/movie?tmdbId=550")
+      .set("Authorization", "Bearer token")
+      .expect(200);
+
+    const response = await request(app)
+      .get("/api/v1/media/search?q=fight club&kind=movie")
+      .set("Authorization", "Bearer token")
+      .expect(200);
+
+    expect(response.body.meta.source).toBe("index");
+    expect(response.body.data.items[0].title).toBe("Fight Club");
+  });
+
+  it("returns mixed movie and tv results when kind is omitted", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    const response = await request(app)
+      .get("/api/v1/media/search?q=fight")
+      .set("Authorization", "Bearer token")
+      .expect(200);
+
+    expect(response.body.data.items.map((item: { kind: string }) => item.kind)).toEqual([
+      "movie",
+      "tv"
+    ]);
+  });
+
+  it("validates search query parameters", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    const response = await request(app)
+      .get("/api/v1/media/search?q=&page=0&pageSize=51")
+      .set("Authorization", "Bearer token")
+      .expect(400);
+
+    expect(response.body.error.code).toBe("validation_failed");
+  });
+
   it("returns provider error when the TV provider fails and no cache exists", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -262,6 +430,33 @@ describe("media routes", () => {
 
     const response = await request(app)
       .get("/api/v1/media/tv?tmdbId=1396")
+      .set("Authorization", "Bearer token")
+      .expect(502);
+
+    expect(response.body.error.code).toBe("provider_unavailable");
+  });
+
+  it("returns provider error when search fails with no cache or index fallback", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("auth.example.com")) {
+        return new Response(
+          JSON.stringify({
+            principalId: "user_1",
+            tenantId: "tenant_1",
+            scopes: ["metadata:read"],
+            expiresAt: "2099-01-01T00:00:00.000Z"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+
+      return new Response("{}", { status: 503 });
+    });
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    const response = await request(app)
+      .get("/api/v1/media/search?q=fight")
       .set("Authorization", "Bearer token")
       .expect(502);
 

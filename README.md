@@ -4,10 +4,11 @@ Current implemented slices:
 - validated config bootstrap
 - Pino structured logging
 - Redis-backed auth validation cache
-- Redis-backed movie and TV snapshot store
-- TMDB movie and TV lookup
+- Redis-backed movie/TV snapshots, search snapshots, and local fetched-record index
+- TMDB movie, TV, and mixed search flows
 - `GET /api/v1/media/movie`
 - `GET /api/v1/media/tv`
+- `GET /api/v1/media/search`
 - `GET /health/live`
 - `GET /health/ready`
 
@@ -44,6 +45,8 @@ Current implemented slices:
    - `TMDB_TIMEOUT_MS`
    - `MOVIE_CACHE_TTL_SECONDS`
    - `TV_CACHE_TTL_SECONDS`
+   - `SEARCH_CACHE_TTL_SECONDS`
+   - `SEARCH_INDEX_TTL_SECONDS`
 4. Build: `npm.cmd run build`
 5. Test: `npm.cmd test`
 6. Optional real Redis integration tests: `npm.cmd run test:redis`
@@ -59,12 +62,14 @@ Current implemented slices:
 - `GET /api/v1/media/tv?tmdbId=1396`
 - `GET /api/v1/media/tv?imdbId=tt0903747`
 - `GET /api/v1/media/tv?mediaId=med_...`
+- `GET /api/v1/media/search?q=fight`
+- `GET /api/v1/media/search?q=breaking&kind=tv&page=1&pageSize=20`
 
 ## Current Limits
 
-- Lookup only, no search yet
+- Lookup and provider-backed search only
 - TMDB provider only
 - Redis is the only state store in this slice
-- Authenticated metadata lookup routes are tenant-aware and rate-limited
+- Authenticated metadata lookup and search routes are tenant-aware and rate-limited
 - IMDb-compatible enrichment is still deferred
 - No channel, BullMQ, stale refresh, or background refresh yet

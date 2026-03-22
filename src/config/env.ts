@@ -17,7 +17,9 @@ const envSchema = z.object({
   TMDB_API_KEY: z.string().min(1),
   TMDB_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   MOVIE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
-  TV_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600)
+  TV_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  SEARCH_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  SEARCH_INDEX_TTL_SECONDS: z.coerce.number().int().positive().default(21600),
 });
 
 export type AppConfig = Readonly<{
@@ -47,6 +49,10 @@ export type AppConfig = Readonly<{
     timeoutMs: number;
     movieTtlSeconds: number;
     tvTtlSeconds: number;
+  };
+  search: {
+    cacheTtlSeconds: number;
+    indexTtlSeconds: number;
   };
 }>;
 
@@ -79,6 +85,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       timeoutMs: parsed.TMDB_TIMEOUT_MS,
       movieTtlSeconds: parsed.MOVIE_CACHE_TTL_SECONDS,
       tvTtlSeconds: parsed.TV_CACHE_TTL_SECONDS
+    },
+    search: {
+      cacheTtlSeconds: parsed.SEARCH_CACHE_TTL_SECONDS,
+      indexTtlSeconds: parsed.SEARCH_INDEX_TTL_SECONDS,
     }
   };
 }

@@ -4,6 +4,7 @@ import { RedisRateLimiter } from "../adapters/rate-limit/redis-rate-limiter.js";
 import { RedisKeyBuilder } from "../adapters/redis-store/redis-key-builder.js";
 import { RedisMediaSnapshotStore } from "../adapters/redis-store/redis-media-snapshot-store.js";
 import { MediaLookupService } from "../application/lookup/media-lookup-service.js";
+import { MediaSearchService } from "../application/search/media-search-service.js";
 import type { AppConfig } from "../config/env.js";
 import { createApp } from "./create-app.js";
 import { createLogger } from "./logger.js";
@@ -19,7 +20,9 @@ export function createRuntime(config: AppConfig, fetchImpl: typeof fetch = fetch
   const snapshotStore = new RedisMediaSnapshotStore(
     redis,
     keyBuilder,
-    Math.max(config.tmdb.movieTtlSeconds, config.tmdb.tvTtlSeconds)
+    Math.max(config.tmdb.movieTtlSeconds, config.tmdb.tvTtlSeconds),
+    config.search.cacheTtlSeconds,
+    config.search.indexTtlSeconds,
   );
   const authValidationPort = new HttpAuthValidationAdapter(
     fetchImpl,
@@ -35,10 +38,19 @@ export function createRuntime(config: AppConfig, fetchImpl: typeof fetch = fetch
     metadataProviderPort,
     rateLimiterPort
   );
+  const mediaSearchService = new MediaSearchService(
+    authValidationPort,
+    snapshotStore,
+    metadataProviderPort,
+    rateLimiterPort,
+    clock,
+    config.search.cacheTtlSeconds,
+  );
 
   const app = createApp({
     logger,
     mediaLookupService,
+    mediaSearchService,
     snapshotStore,
     requestBodyLimitBytes: config.server.requestBodyLimitBytes
   });

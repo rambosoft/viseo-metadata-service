@@ -4,6 +4,7 @@ import { Redis } from "ioredis";
 import { RedisRateLimiter } from "../../src/adapters/rate-limit/redis-rate-limiter.js";
 import { RedisKeyBuilder } from "../../src/adapters/redis-store/redis-key-builder.js";
 import { RedisMediaSnapshotStore } from "../../src/adapters/redis-store/redis-media-snapshot-store.js";
+import { buildSearchRequestFingerprint } from "../../src/application/search/media-search-helpers.js";
 import type { MediaRecord } from "../../src/core/media/types.js";
 
 const redisUrl = process.env.REDIS_URL;
@@ -66,7 +67,7 @@ describe.skipIf(redisUrl === undefined || redisUrl.length === 0)(
     });
 
     it("stores and resolves snapshots against a real Redis instance", async () => {
-      const store = new RedisMediaSnapshotStore(redis, new RedisKeyBuilder(prefix), 3600);
+      const store = new RedisMediaSnapshotStore(redis, new RedisKeyBuilder(prefix), 3600, 900, 21600);
       const record = buildMovieRecord(prefix);
 
       await store.putSnapshot(record);
@@ -77,6 +78,61 @@ describe.skipIf(redisUrl === undefined || redisUrl.length === 0)(
       });
 
       expect(found?.record.canonicalTitle).toBe("Fight Club");
+    });
+
+    it("stores and resolves search data against a real Redis instance", async () => {
+      const store = new RedisMediaSnapshotStore(redis, new RedisKeyBuilder(prefix), 3600, 900, 21600);
+      const record = buildMovieRecord(prefix);
+      await store.putSnapshot(record);
+
+      const local = await store.searchLocalIndex(record.tenantId, {
+        q: "Fight Club",
+        kind: "movie",
+        lang: "en" as never,
+        page: 1,
+        pageSize: 20
+      });
+
+      expect(local.total).toBe(1);
+
+      const fingerprint = buildSearchRequestFingerprint({
+        tenantId: record.tenantId,
+        q: "Fight Club",
+        kind: "movie",
+        lang: "en" as never,
+        page: 1,
+        pageSize: 20
+      });
+
+      await store.putSearchSnapshot(fingerprint, {
+        tenantId: record.tenantId,
+        query: "fight club",
+        kind: "movie",
+        lang: "en" as never,
+        page: 1,
+        pageSize: 20,
+        total: 1,
+        items: [
+          {
+            mediaId: record.mediaId as never,
+            tenantId: record.tenantId as never,
+            kind: "movie",
+            title: "Fight Club",
+            genres: ["Drama"],
+            images: {},
+            identifiers: {
+              mediaId: record.mediaId as never,
+              tmdbId: "550"
+            }
+          }
+        ],
+        sourceProviders: ["tmdb"],
+        generatedAt: "2026-01-01T00:00:00.000Z",
+        expiresAt: "2026-01-01T00:15:00.000Z"
+      });
+
+      const snapshot = await store.getSearchSnapshot(record.tenantId, fingerprint);
+      expect(snapshot?.snapshot.total).toBe(1);
     });
 
     it("enforces rate limiting against a real Redis instance", async () => {

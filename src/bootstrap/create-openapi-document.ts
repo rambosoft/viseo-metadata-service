@@ -126,6 +126,65 @@ export function createOpenApiDocument() {
             },
           },
         },
+        SearchResponse: {
+          type: "object",
+          required: ["data", "meta"],
+          properties: {
+            data: {
+              type: "object",
+              required: ["items", "page", "pageSize"],
+              properties: {
+                items: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    required: ["mediaId", "kind", "title", "genres", "images", "identifiers"],
+                    properties: {
+                      mediaId: { type: "string" },
+                      kind: { type: "string", enum: ["movie", "tv"] },
+                      title: { type: "string" },
+                      originalTitle: { type: "string" },
+                      description: { type: "string" },
+                      releaseDate: { type: "string" },
+                      releaseYear: { type: "integer" },
+                      firstAirDate: { type: "string" },
+                      firstAirYear: { type: "integer" },
+                      rating: { type: "number" },
+                      genres: { type: "array", items: { type: "string" } },
+                      images: {
+                        type: "object",
+                        properties: {
+                          posterUrl: { type: "string" },
+                          backdropUrl: { type: "string" },
+                        },
+                      },
+                      identifiers: {
+                        type: "object",
+                        properties: {
+                          tmdbId: { type: "string" },
+                          imdbId: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                },
+                page: { type: "integer" },
+                pageSize: { type: "integer" },
+                total: { type: "integer" },
+              },
+            },
+            meta: {
+              type: "object",
+              required: ["requestId", "tenantId", "source", "stale"],
+              properties: {
+                requestId: { type: "string" },
+                tenantId: { type: "string" },
+                source: { type: "string", enum: ["cache", "index", "provider"] },
+                stale: { type: "boolean" },
+              },
+            },
+          },
+        },
       },
     },
     paths: {
@@ -251,6 +310,61 @@ export function createOpenApiDocument() {
             },
             "404": {
               description: "TV show not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorEnvelope" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limit exceeded",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorEnvelope" },
+                },
+              },
+            },
+            "502": {
+              description: "Provider unavailable",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorEnvelope" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/v1/media/search": {
+        get: {
+          summary: "Search movie and TV metadata",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: "q", in: "query", required: true, schema: { type: "string" } },
+            { name: "kind", in: "query", schema: { type: "string", enum: ["movie", "tv"] } },
+            { name: "lang", in: "query", schema: { type: "string", default: "en" } },
+            { name: "page", in: "query", schema: { type: "integer", default: 1, minimum: 1 } },
+            { name: "pageSize", in: "query", schema: { type: "integer", default: 20, minimum: 1, maximum: 50 } },
+          ],
+          responses: {
+            "200": {
+              description: "Search result page",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/SearchResponse" },
+                },
+              },
+            },
+            "400": {
+              description: "Validation failure",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorEnvelope" },
+                },
+              },
+            },
+            "401": {
+              description: "Authentication failure",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/ErrorEnvelope" },

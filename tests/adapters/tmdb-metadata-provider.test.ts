@@ -82,4 +82,68 @@ describe("TmdbMetadataProvider", () => {
       })
     ).rejects.toThrow("TMDB unavailable");
   });
+
+  it("normalizes mixed movie and tv search results from TMDB multi search", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          page: 1,
+          total_results: 2,
+          results: [
+            {
+              media_type: "movie",
+              id: 550,
+              title: "Fight Club",
+              original_title: "Fight Club",
+              overview: "Movie result",
+              release_date: "1999-10-15",
+              vote_average: 8.4,
+              poster_path: "/fight.jpg",
+              backdrop_path: "/fight-backdrop.jpg",
+              genre_ids: [18]
+            },
+            {
+              media_type: "tv",
+              id: 1396,
+              name: "Breaking Bad",
+              original_name: "Breaking Bad",
+              overview: "TV result",
+              first_air_date: "2008-01-20",
+              vote_average: 8.9,
+              poster_path: "/bb.jpg",
+              backdrop_path: "/bb-backdrop.jpg",
+              genre_ids: [18]
+            }
+          ]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+
+    const provider = new TmdbMetadataProvider(
+      fetchImpl as typeof fetch,
+      {
+        baseUrl: "https://api.themoviedb.org/3",
+        imageBaseUrl: "https://image.tmdb.org/t/p/w500",
+        apiKey: "secret",
+        timeoutMs: 1000,
+        movieTtlSeconds: 3600,
+        tvTtlSeconds: 7200
+      },
+      fixedClock
+    );
+
+    const result = await provider.search({
+      tenantId: "tenant_1",
+      query: "fight",
+      language: "en" as never,
+      page: 1,
+      pageSize: 20
+    });
+
+    expect(result.total).toBe(2);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]?.kind).toBe("movie");
+    expect(result.items[1]?.kind).toBe("tv");
+  });
 });

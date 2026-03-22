@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { RedisKeyBuilder } from "../../src/adapters/redis-store/redis-key-builder.js";
 import { RedisMediaSnapshotStore } from "../../src/adapters/redis-store/redis-media-snapshot-store.js";
 import type { MediaRecord } from "../../src/core/media/types.js";
+import { buildSearchRequestFingerprint } from "../../src/application/search/media-search-helpers.js";
 
 function buildMovieRecord(): MediaRecord {
   return {
@@ -85,7 +86,7 @@ function buildTvRecord(): MediaRecord {
 describe("RedisMediaSnapshotStore", () => {
   it("stores and resolves a movie snapshot by tmdbId", async () => {
     const redis = new Redis();
-    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600);
+    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600, 900, 21600);
     const record = buildMovieRecord();
 
     await store.putSnapshot(record);
@@ -100,7 +101,7 @@ describe("RedisMediaSnapshotStore", () => {
 
   it("stores and resolves a TV snapshot by imdbId", async () => {
     const redis = new Redis();
-    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600);
+    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600, 900, 21600);
     const record = buildTvRecord();
 
     await store.putSnapshot(record);
@@ -112,5 +113,67 @@ describe("RedisMediaSnapshotStore", () => {
 
     expect(found?.record.kind).toBe("tv");
     expect(found?.record.canonicalTitle).toBe("Breaking Bad");
+  });
+
+  it("stores and resolves a search snapshot", async () => {
+    const redis = new Redis();
+    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600, 900, 21600);
+    const record = buildMovieRecord();
+    const fingerprint = buildSearchRequestFingerprint({
+      tenantId: "tenant_1",
+      q: "Fight Club",
+      lang: "en" as never,
+      page: 1,
+      pageSize: 20
+    });
+
+    await store.putSearchSnapshot(fingerprint, {
+      tenantId: "tenant_1" as never,
+      query: "fight club",
+      lang: "en" as never,
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      items: [
+        {
+          mediaId: record.mediaId as never,
+          tenantId: record.tenantId as never,
+          kind: "movie",
+          title: "Fight Club",
+          genres: ["Drama"],
+          images: {},
+          identifiers: {
+            mediaId: record.mediaId as never,
+            tmdbId: "550"
+          }
+        }
+      ],
+      sourceProviders: ["tmdb"],
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      expiresAt: "2026-01-01T00:15:00.000Z"
+    });
+
+    const found = await store.getSearchSnapshot("tenant_1" as never, fingerprint);
+
+    expect(found?.snapshot.total).toBe(1);
+    expect(found?.snapshot.items[0]?.title).toBe("Fight Club");
+  });
+
+  it("indexes lookup snapshots for deterministic local search", async () => {
+    const redis = new Redis();
+    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600, 900, 21600);
+    await store.putSnapshot(buildMovieRecord());
+    await store.putSnapshot(buildTvRecord());
+
+    const found = await store.searchLocalIndex("tenant_1" as never, {
+      q: "Breaking",
+      kind: "tv",
+      lang: "en" as never,
+      page: 1,
+      pageSize: 20
+    });
+
+    expect(found.total).toBe(1);
+    expect(found.items[0]?.title).toBe("Breaking Bad");
   });
 });

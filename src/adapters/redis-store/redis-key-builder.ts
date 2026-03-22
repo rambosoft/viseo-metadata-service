@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { MediaKind, TenantId } from "../../core/media/types.js";
+import type { SearchRequestFingerprint } from "../../core/search/types.js";
 import type { LookupIdentifier } from "../../ports/providers/metadata-provider-port.js";
 
 export class RedisKeyBuilder {
@@ -34,5 +35,24 @@ export class RedisKeyBuilder {
     identifier: LookupIdentifier,
   ): string {
     return `${this.namespace}:v1:tenant:${tenantId}:${kind}:lookup:${identifier.type}:${identifier.value}`;
+  }
+
+  public searchSnapshot(
+    tenantId: TenantId,
+    fingerprint: SearchRequestFingerprint,
+  ): string {
+    return `${this.namespace}:v1:tenant:${tenantId}:search:snapshot:${fingerprint}`;
+  }
+
+  public searchIndexDocument(tenantId: TenantId, mediaId: string): string {
+    return `${this.namespace}:v1:tenant:${tenantId}:search:index:doc:${mediaId}`;
+  }
+
+  public searchIndexToken(
+    tenantId: TenantId,
+    kind: MediaKind,
+    token: string,
+  ): string {
+    return `${this.namespace}:v1:tenant:${tenantId}:search:index:${kind}:token:${token}`;
   }
 }

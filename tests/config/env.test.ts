@@ -16,6 +16,8 @@ describe("loadConfig", () => {
     expect(config.rateLimit.maxRequests).toBe(120);
     expect(config.tmdb.baseUrl).toBe("https://api.themoviedb.org/3");
     expect(config.tmdb.tvTtlSeconds).toBe(3600);
+    expect(config.search.cacheTtlSeconds).toBe(900);
+    expect(config.search.indexTtlSeconds).toBe(21600);
   });
 
   it("throws when required values are missing", () => {

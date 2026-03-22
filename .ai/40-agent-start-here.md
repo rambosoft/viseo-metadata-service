@@ -24,8 +24,8 @@
 
 - `Confirmed`: Build the movie lookup path first.
 - `Confirmed`: Include config, auth boundary, Redis snapshot flow, TMDB adapter, route contract, and tests.
-- `Confirmed`: Movie and TV lookup parity are now implemented.
-- `Confirmed`: The next implementation target is search flow, cached query snapshots, and local fetched-record indexing.
+- `Confirmed`: Movie lookup, TV lookup, and search are now implemented.
+- `Confirmed`: The next implementation target is IMDb-compatible adapter work, identifier enrichment, and later refresh flow.
 
 ## Non-Negotiable Rules
 

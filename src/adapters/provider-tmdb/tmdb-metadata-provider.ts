@@ -9,11 +9,22 @@ import type {
   MovieMediaRecord,
   TvMediaRecord,
 } from "../../core/media/types.js";
-import type { MetadataProviderPort, ProviderLookupResult } from "../../ports/providers/metadata-provider-port.js";
+import type {
+  MetadataProviderPort,
+  ProviderLookupResult,
+  ProviderSearchResult,
+} from "../../ports/providers/metadata-provider-port.js";
 import type { ClockPort } from "../../ports/shared/clock-port.js";
+import type { SearchResultItem } from "../../core/search/types.js";
 import {
   tmdbFindResponseSchema,
   tmdbMovieDetailsSchema,
+  tmdbMovieSearchItemSchema,
+  tmdbMovieSearchResponseSchema,
+  tmdbMultiSearchItemSchema,
+  tmdbMultiSearchResponseSchema,
+  tmdbTvSearchItemSchema,
+  tmdbTvSearchResponseSchema,
   tmdbTvDetailsSchema,
 } from "./tmdb-schemas.js";
 
@@ -74,6 +85,38 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
         payload,
         args.identifier.type === "imdbId" ? args.identifier.value : undefined
       )
+    };
+  }
+
+  public async search(
+    args: Parameters<MetadataProviderPort["search"]>[0]
+  ): Promise<ProviderSearchResult> {
+    if (args.kind === "movie") {
+      const response = await this.fetchTmdbMovieSearch(args.query, args.language, args.page);
+      return {
+        provider: "tmdb",
+        sourceProviders: ["tmdb"],
+        items: response.results.map((item) => this.toMovieSearchItem(args.tenantId, item)),
+        ...(response.total_results !== undefined ? { total: response.total_results } : {}),
+      };
+    }
+
+    if (args.kind === "tv") {
+      const response = await this.fetchTmdbTvSearch(args.query, args.language, args.page);
+      return {
+        provider: "tmdb",
+        sourceProviders: ["tmdb"],
+        items: response.results.map((item) => this.toTvSearchItem(args.tenantId, item)),
+        ...(response.total_results !== undefined ? { total: response.total_results } : {}),
+      };
+    }
+
+    const response = await this.fetchTmdbMultiSearch(args.query, args.language, args.page);
+    return {
+      provider: "tmdb",
+      sourceProviders: ["tmdb"],
+      items: response.results.flatMap((item) => this.toMixedSearchItems(args.tenantId, item)),
+      ...(response.total_results !== undefined ? { total: response.total_results } : {}),
     };
   }
 
@@ -228,6 +271,97 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
     };
   }
 
+  private toMovieSearchItem(
+    tenantId: string,
+    payload: typeof tmdbMovieSearchItemSchema._type,
+  ): SearchResultItem {
+    const mediaId = buildMediaId("tmdb", "movie", {
+      type: "tmdbId",
+      value: String(payload.id)
+    });
+
+    return {
+      mediaId,
+      tenantId: tenantId as SearchResultItem["tenantId"],
+      kind: "movie",
+      title: payload.title,
+      ...(payload.original_title !== undefined ? { originalTitle: payload.original_title } : {}),
+      ...(payload.overview !== undefined ? { description: payload.overview } : {}),
+      ...(payload.release_date !== undefined ? { releaseDate: payload.release_date } : {}),
+      ...(
+        payload.release_date !== undefined && payload.release_date.length >= 4
+          ? { releaseYear: Number(payload.release_date.slice(0, 4)) }
+          : {}
+      ),
+      ...(payload.vote_average !== undefined ? { rating: payload.vote_average } : {}),
+      genres: [],
+      images: {
+        ...(payload.poster_path ? { posterUrl: `${this.tmdbConfig.imageBaseUrl}${payload.poster_path}` } : {}),
+        ...(payload.backdrop_path ? { backdropUrl: `${this.tmdbConfig.imageBaseUrl}${payload.backdrop_path}` } : {})
+      },
+      identifiers: {
+        mediaId,
+        tmdbId: String(payload.id),
+      }
+    };
+  }
+
+  private toTvSearchItem(
+    tenantId: string,
+    payload: typeof tmdbTvSearchItemSchema._type,
+  ): SearchResultItem {
+    const mediaId = buildMediaId("tmdb", "tv", {
+      type: "tmdbId",
+      value: String(payload.id)
+    });
+
+    return {
+      mediaId,
+      tenantId: tenantId as SearchResultItem["tenantId"],
+      kind: "tv",
+      title: payload.name,
+      ...(payload.original_name !== undefined ? { originalTitle: payload.original_name } : {}),
+      ...(payload.overview !== undefined ? { description: payload.overview } : {}),
+      ...(payload.first_air_date !== undefined ? { firstAirDate: payload.first_air_date } : {}),
+      ...(
+        payload.first_air_date !== undefined && payload.first_air_date.length >= 4
+          ? { firstAirYear: Number(payload.first_air_date.slice(0, 4)) }
+          : {}
+      ),
+      ...(payload.vote_average !== undefined ? { rating: payload.vote_average } : {}),
+      genres: [],
+      images: {
+        ...(payload.poster_path ? { posterUrl: `${this.tmdbConfig.imageBaseUrl}${payload.poster_path}` } : {}),
+        ...(payload.backdrop_path ? { backdropUrl: `${this.tmdbConfig.imageBaseUrl}${payload.backdrop_path}` } : {})
+      },
+      identifiers: {
+        mediaId,
+        tmdbId: String(payload.id),
+      }
+    };
+  }
+
+  private toMixedSearchItems(
+    tenantId: string,
+    payload: typeof tmdbMultiSearchItemSchema._type,
+  ): SearchResultItem[] {
+    if (payload.media_type === "movie") {
+      const parsed = tmdbMovieSearchItemSchema.safeParse(payload);
+      if (parsed.success) {
+        return [this.toMovieSearchItem(tenantId, parsed.data)];
+      }
+    }
+
+    if (payload.media_type === "tv") {
+      const parsed = tmdbTvSearchItemSchema.safeParse(payload);
+      if (parsed.success) {
+        return [this.toTvSearchItem(tenantId, parsed.data)];
+      }
+    }
+
+    return [];
+  }
+
   private async fetchTmdb(path: string) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.tmdbConfig.timeoutMs);
@@ -252,6 +386,27 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private async fetchTmdbMovieSearch(query: string, language: string, page: number) {
+    return this.fetchSearch(
+      `/search/movie?query=${encodeURIComponent(query)}&language=${encodeURIComponent(language)}&page=${page}`,
+      tmdbMovieSearchResponseSchema
+    );
+  }
+
+  private async fetchTmdbTvSearch(query: string, language: string, page: number) {
+    return this.fetchSearch(
+      `/search/tv?query=${encodeURIComponent(query)}&language=${encodeURIComponent(language)}&page=${page}`,
+      tmdbTvSearchResponseSchema
+    );
+  }
+
+  private async fetchTmdbMultiSearch(query: string, language: string, page: number) {
+    return this.fetchSearch(
+      `/search/multi?query=${encodeURIComponent(query)}&language=${encodeURIComponent(language)}&page=${page}`,
+      tmdbMultiSearchResponseSchema
+    );
   }
 
   private async fetchTmdbTv(path: string) {
@@ -293,6 +448,32 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
         throw new ProviderUnavailableError("TMDB unavailable");
       }
       return tmdbFindResponseSchema.parse(await response.json());
+    } catch (error) {
+      if (error instanceof ProviderUnavailableError) {
+        throw error;
+      }
+      throw new ProviderUnavailableError("TMDB unavailable");
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async fetchSearch<T>(
+    path: string,
+    schema: { parse(input: unknown): T }
+  ): Promise<T> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.tmdbConfig.timeoutMs);
+
+    try {
+      const response = await this.fetchImpl(
+        `${this.tmdbConfig.baseUrl}${path}${path.includes("?") ? "&" : "?"}api_key=${this.tmdbConfig.apiKey}`,
+        { signal: controller.signal }
+      );
+      if (!response.ok) {
+        throw new ProviderUnavailableError("TMDB unavailable");
+      }
+      return schema.parse(await response.json());
     } catch (error) {
       if (error instanceof ProviderUnavailableError) {
         throw error;

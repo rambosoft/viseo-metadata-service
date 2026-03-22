@@ -4,6 +4,7 @@ import type {
   MediaRecord,
   ProviderName,
 } from "../../core/media/types.js";
+import type { SearchResultItem } from "../../core/search/types.js";
 
 export type LookupIdentifier =
   | Readonly<{ type: "mediaId"; value: string }>
@@ -22,8 +23,25 @@ export type ProviderLookupResult = Readonly<{
   record: MediaRecord;
 }>;
 
+export type ProviderSearchArgs = Readonly<{
+  tenantId: string;
+  kind?: MediaKind;
+  query: string;
+  language: LocaleCode;
+  page: number;
+  pageSize: number;
+}>;
+
+export type ProviderSearchResult = Readonly<{
+  provider: ProviderName;
+  sourceProviders: readonly ProviderName[];
+  items: readonly SearchResultItem[];
+  total?: number;
+}>;
+
 export interface MetadataProviderPort {
   lookupByIdentifier(
     args: LookupByIdentifierArgs,
   ): Promise<ProviderLookupResult | null>;
+  search(args: ProviderSearchArgs): Promise<ProviderSearchResult>;
 }
