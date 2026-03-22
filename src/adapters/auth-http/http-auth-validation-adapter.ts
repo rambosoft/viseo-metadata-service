@@ -1,8 +1,13 @@
 import type { Redis as RedisClient } from "ioredis";
 
-import { AuthenticationError, DependencyUnavailableError } from "../../core/shared/errors.js";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  DependencyUnavailableError,
+} from "../../core/shared/errors.js";
 import type { AuthContext } from "../../core/auth/types.js";
 import type { AuthValidationPort } from "../../ports/auth/auth-validation-port.js";
+import type { MetricsPort } from "../../ports/observability/metrics-port.js";
 import { toTenantId } from "../../application/lookup/media-lookup-helpers.js";
 import { RedisKeyBuilder } from "../redis-store/redis-key-builder.js";
 import { cachedAuthContextSchema } from "../redis-store/redis-schemas.js";
@@ -16,11 +21,17 @@ type AuthConfig = Readonly<{
 }>;
 
 export class HttpAuthValidationAdapter implements AuthValidationPort {
+  private static readonly noopMetrics: MetricsPort = {
+    increment: () => undefined,
+    observe: () => undefined,
+  };
+
   public constructor(
     private readonly fetchImpl: FetchLike,
-    private readonly redis: Pick<RedisClient, "get" | "setex">,
+    private readonly redis: Pick<RedisClient, "del" | "get" | "setex">,
     private readonly keyBuilder: RedisKeyBuilder,
-    private readonly authConfig: AuthConfig
+    private readonly authConfig: AuthConfig,
+    private readonly metrics: MetricsPort = HttpAuthValidationAdapter.noopMetrics,
   ) {}
 
   public async validateToken(token: string): Promise<AuthContext> {
@@ -28,11 +39,18 @@ export class HttpAuthValidationAdapter implements AuthValidationPort {
     const cached = await this.redis.get(cacheKey);
     if (cached !== null) {
       try {
+        this.metrics.increment("auth_cache_request", { outcome: "hit" });
         return this.toAuthContext(cachedAuthContextSchema.parse(JSON.parse(cached)));
       } catch {
-        // ignore corrupted cache and fallback to auth service
+        await this.redis.del(cacheKey);
+        this.metrics.increment("cache_payload_evicted", {
+          scope: "auth_context",
+          reason: "validation_failed",
+        });
       }
     }
+
+    this.metrics.increment("auth_cache_request", { outcome: "miss" });
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.authConfig.timeoutMs);
@@ -48,22 +66,34 @@ export class HttpAuthValidationAdapter implements AuthValidationPort {
         signal: controller.signal
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
+        this.metrics.increment("auth_validation_result", { status: 401 });
         throw new AuthenticationError();
       }
 
+      if (response.status === 403) {
+        this.metrics.increment("auth_validation_result", { status: 403 });
+        throw new AuthorizationError();
+      }
+
       if (!response.ok) {
+        this.metrics.increment("auth_validation_result", { status: response.status });
         throw new DependencyUnavailableError("Auth service unavailable");
       }
 
       const parsed = cachedAuthContextSchema.parse(await response.json());
+      this.metrics.increment("auth_validation_result", { status: 200 });
       const ttlSeconds = this.buildCacheTtl(parsed.expiresAt);
       if (ttlSeconds > 0) {
         await this.redis.setex(cacheKey, ttlSeconds, JSON.stringify(parsed));
       }
       return this.toAuthContext(parsed);
     } catch (error) {
-      if (error instanceof AuthenticationError || error instanceof DependencyUnavailableError) {
+      if (
+        error instanceof AuthenticationError ||
+        error instanceof AuthorizationError ||
+        error instanceof DependencyUnavailableError
+      ) {
         throw error;
       }
       throw new DependencyUnavailableError("Auth service unavailable");

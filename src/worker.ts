@@ -1,4 +1,5 @@
 import { createWorkerRuntime } from "./bootstrap/create-worker-runtime.js";
+import { runShutdownStage } from "./bootstrap/shutdown.js";
 import { loadConfig } from "./config/env.js";
 
 async function main() {
@@ -15,14 +16,23 @@ async function main() {
 
   const shutdown = async () => {
     runtime.logger.info("Shutting down refresh worker");
-    await runtime.close();
+    await runShutdownStage(
+      runtime.logger,
+      "worker-runtime",
+      config.refresh.workerShutdownTimeoutMs,
+      () => runtime.close(),
+    );
   };
 
   process.on("SIGINT", () => {
-    void shutdown().finally(() => process.exit(0));
+    void shutdown()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(1));
   });
   process.on("SIGTERM", () => {
-    void shutdown().finally(() => process.exit(0));
+    void shutdown()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(1));
   });
 }
 

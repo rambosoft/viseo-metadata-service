@@ -23,7 +23,7 @@
 5. Adapters:
    - auth service
    - TMDB
-   - IMDb-compatible provider
+   - IMDb-compatible provider boundary reserved for a later approved binding
    - Redis
    - BullMQ
    - observability
@@ -50,5 +50,6 @@
 1. Worker receives a validated refresh job.
 2. Provider adapter fetches and validates upstream data.
 3. Normalizer builds provider snapshot and canonical record.
-4. Hash comparison decides whether to rewrite stored state.
-5. Related caches and index entries are refreshed or invalidated.
+4. Hash comparison decides whether canonical content is rewritten or only freshness-derived state is refreshed.
+5. Last-known-good canonical state is preserved when the provider fails.
+6. Related hot lookup state and search index entries are refreshed or cleaned up by dedicated maintenance jobs.

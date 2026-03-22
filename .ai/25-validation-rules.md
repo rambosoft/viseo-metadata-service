@@ -14,6 +14,7 @@
 - `Confirmed`: Validate all provider responses before normalization.
 - `Confirmed`: Validate all Redis payloads before deserialize use.
 - `Confirmed`: Reject unknown critical fields only where contract drift would create unsafe behavior.
+- `Confirmed`: Auth payload fields required for tenant-scoped execution must be non-empty.
 
 ## Lookup Validation
 
@@ -31,3 +32,4 @@
 
 - `Confirmed`: Schema version is explicit in stored canonical payloads and key namespaces.
 - `Confirmed`: Validation failure on cached data must trigger cache eviction and safe fallback behavior.
+- `Confirmed`: Job payload validation happens on both enqueue and worker execution for refresh, cleanup, and warmup flows.

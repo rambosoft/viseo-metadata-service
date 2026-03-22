@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { HttpAuthValidationAdapter } from "../../src/adapters/auth-http/http-auth-validation-adapter.js";
 import { RedisLookupCoordinator } from "../../src/adapters/coordination/redis-lookup-coordinator.js";
+import { PrometheusMetrics } from "../../src/adapters/observability/prometheus-metrics.js";
 import { TmdbMetadataProvider } from "../../src/adapters/provider-tmdb/tmdb-metadata-provider.js";
 import { AllowAllRateLimiter } from "../../src/adapters/rate-limit/allow-all-rate-limiter.js";
 import { RedisRateLimiter } from "../../src/adapters/rate-limit/redis-rate-limiter.js";
@@ -13,6 +14,7 @@ import { RedisMediaSnapshotStore } from "../../src/adapters/redis-store/redis-me
 import { MediaLookupService } from "../../src/application/lookup/media-lookup-service.js";
 import { MediaSearchService } from "../../src/application/search/media-search-service.js";
 import { createApp } from "../../src/bootstrap/create-app.js";
+import { createReadinessCheck } from "../../src/bootstrap/create-readiness-check.js";
 import { createLogger } from "../../src/bootstrap/logger.js";
 import type { MediaRecord } from "../../src/core/media/types.js";
 import type { RefreshQueuePort } from "../../src/ports/refresh/refresh-queue-port.js";
@@ -21,17 +23,19 @@ import type { ClockPort } from "../../src/ports/shared/clock-port.js";
 const fixedClock: ClockPort = {
   now: () => new Date("2026-01-01T00:00:00.000Z")
 };
-const testRedisClients: Redis[] = [];
+const testRedisClients: Array<InstanceType<typeof Redis>> = [];
 
 function createTestApp(
   fetchImpl: typeof fetch,
   options?: {
     rateLimitMaxRequests?: number;
     refreshQueue?: RefreshQueuePort;
+    readinessCheck?: ReturnType<typeof createReadinessCheck>;
   }
 ) {
   const redis = new Redis();
   testRedisClients.push(redis);
+  const metrics = new PrometheusMetrics();
   const keyBuilder = new RedisKeyBuilder(`md_${Math.random().toString(16).slice(2)}`);
   const snapshotStore = new RedisMediaSnapshotStore(
     redis as never,
@@ -49,7 +53,8 @@ function createTestApp(
       serviceUrl: "https://auth.example.com",
       timeoutMs: 1000,
       cacheTtlSeconds: 3600
-    }
+    },
+    metrics,
   );
   const provider = new TmdbMetadataProvider(
     fetchImpl,
@@ -70,7 +75,7 @@ function createTestApp(
       ? new RedisRateLimiter(redis as never, keyBuilder, {
           windowSeconds: 60,
           maxRequests: options.rateLimitMaxRequests
-        })
+        }, metrics)
       : new AllowAllRateLimiter();
   const lookupCoordinator = new RedisLookupCoordinator(
     redis as never,
@@ -86,6 +91,7 @@ function createTestApp(
     options?.refreshQueue ?? new NoopRefreshQueue(),
     lookupCoordinator,
     createLogger("info"),
+    metrics,
   );
   const searchService = new MediaSearchService(
     auth,
@@ -93,18 +99,32 @@ function createTestApp(
     provider,
     rateLimiter,
     fixedClock,
-    900
+    900,
+    metrics,
   );
+  const readinessCheck =
+    options?.readinessCheck ??
+    createReadinessCheck({
+      redis: async () => snapshotStore.isHealthy(),
+      bullmq: async () => true,
+    });
   return {
     app: createApp({
       logger: createLogger("info"),
       mediaLookupService: service,
       mediaSearchService: searchService,
       snapshotStore,
-      requestBodyLimitBytes: 16384
+      requestBodyLimitBytes: 16384,
+      metricsPort: metrics,
+      metricsEndpoint: {
+        contentType: metrics.contentType,
+        render: () => metrics.render(),
+      },
+      readinessCheck,
     }),
     fetchImpl,
     snapshotStore,
+    metrics,
   };
 }
 
@@ -356,6 +376,25 @@ describe("media routes", () => {
     expect(response.body.paths["/api/v1/media/movie"]).toBeDefined();
     expect(response.body.paths["/api/v1/media/tv"]).toBeDefined();
     expect(response.body.paths["/api/v1/media/search"]).toBeDefined();
+    expect(response.body.paths["/metrics"]).toBeDefined();
+  });
+
+  it("returns Prometheus metrics", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    await request(app)
+      .get("/api/v1/media/movie?tmdbId=550")
+      .set("Authorization", "Bearer token")
+      .expect(200);
+
+    const response = await request(app)
+      .get("/metrics")
+      .expect(200);
+
+    expect(response.headers["content-type"]).toContain("text/plain");
+    expect(response.text).toContain("http_requests_total");
+    expect(response.text).toContain("metadata_lookup_cache_total");
   });
 
   it("returns 401 for invalid token", async () => {
@@ -368,6 +407,18 @@ describe("media routes", () => {
       .expect(401);
 
     expect(response.body.error.code).toBe("authentication_failed");
+  });
+
+  it("returns 403 when the auth service denies authorization", async () => {
+    const fetchImpl = vi.fn(async () => new Response("{}", { status: 403 }));
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    const response = await request(app)
+      .get("/api/v1/media/tv?tmdbId=1396")
+      .set("Authorization", "Bearer token")
+      .expect(403);
+
+    expect(response.body.error.code).toBe("authorization_failed");
   });
 
   it("returns 429 when the route rate limit is exceeded", async () => {
@@ -412,6 +463,14 @@ describe("media routes", () => {
       enqueueRecordRefresh: vi.fn(async (job) => ({
         enqueued: true,
         jobId: `refresh:${job.mediaId}`,
+      })),
+      enqueueExpiredCacheCleanup: vi.fn(async (job) => ({
+        enqueued: true,
+        jobId: `cleanup:${job.mediaId}`,
+      })),
+      enqueueHotRecordWarmup: vi.fn(async (job) => ({
+        enqueued: true,
+        jobId: `warmup:${job.mediaId}`,
       })),
     };
     const { app, snapshotStore } = createTestApp(fetchImpl as typeof fetch, {
@@ -619,5 +678,23 @@ describe("media routes", () => {
 
     await request(app).get("/health/live").expect(200);
     await request(app).get("/health/ready").expect(200);
+  });
+
+  it("reports degraded readiness when a dependency is down", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch, {
+      readinessCheck: createReadinessCheck({
+        redis: async () => true,
+        bullmq: async () => false,
+      }),
+    });
+
+    const response = await request(app).get("/health/ready").expect(503);
+
+    expect(response.body.status).toBe("degraded");
+    expect(response.body.dependencies).toEqual({
+      redis: "up",
+      bullmq: "down",
+    });
   });
 });

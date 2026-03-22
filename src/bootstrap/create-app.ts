@@ -10,7 +10,9 @@ import { mediaLookupQuerySchema } from "../application/lookup/media-lookup-schem
 import type { MediaLookupService } from "../application/lookup/media-lookup-service.js";
 import { mediaSearchQuerySchema } from "../application/search/media-search-schemas.js";
 import type { MediaSearchService } from "../application/search/media-search-service.js";
+import type { MetricsPort } from "../ports/observability/metrics-port.js";
 import type { MediaSnapshotStorePort } from "../ports/storage/media-snapshot-store-port.js";
+import type { ReadinessReport } from "./create-readiness-check.js";
 import { createOpenApiDocument } from "./create-openapi-document.js";
 
 type RequestContext = {
@@ -24,14 +26,35 @@ export function createApp(args: {
   mediaSearchService: MediaSearchService;
   snapshotStore: MediaSnapshotStorePort;
   requestBodyLimitBytes: number;
+  metricsPort: MetricsPort;
+  metricsEndpoint: {
+    contentType: string;
+    render(): Promise<string>;
+  };
+  readinessCheck: () => Promise<ReadinessReport>;
 }) {
   const app = express();
   app.use(express.json({ limit: args.requestBodyLimitBytes }));
 
   app.use((req, res, next) => {
     const requestId = req.header("x-request-id") ?? randomUUID();
+    const startedAt = process.hrtime.bigint();
     setRequestContext(res, { requestId });
     res.setHeader("x-request-id", requestId);
+    res.on("finish", () => {
+      const route = req.path;
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      args.metricsPort.increment("http_request_total", {
+        method: req.method,
+        route,
+        status_code: res.statusCode,
+      });
+      args.metricsPort.observe("http_request_duration_ms", durationMs, {
+        method: req.method,
+        route,
+        status_code: res.statusCode,
+      });
+    });
     next();
   });
 
@@ -43,15 +66,19 @@ export function createApp(args: {
     res.status(200).json(createOpenApiDocument());
   });
 
+  app.get("/metrics", async (_req, res, next) => {
+    try {
+      res.setHeader("content-type", args.metricsEndpoint.contentType);
+      res.status(200).send(await args.metricsEndpoint.render());
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get("/health/ready", async (_req, res, next) => {
     try {
-      const redisHealthy = await args.snapshotStore.isHealthy();
-      res.status(redisHealthy ? 200 : 503).json({
-        status: redisHealthy ? "ready" : "degraded",
-        dependencies: {
-          redis: redisHealthy ? "up" : "down"
-        }
-      });
+      const report = await args.readinessCheck();
+      res.status(report.status === "ready" ? 200 : 503).json(report);
     } catch (error) {
       next(error);
     }

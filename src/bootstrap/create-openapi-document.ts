@@ -203,10 +203,27 @@ export function createOpenApiDocument() {
           summary: "Readiness probe",
           responses: {
             "200": {
-              description: "Redis dependency is healthy",
+              description: "Runtime dependencies are healthy",
             },
             "503": {
-              description: "Redis dependency is unavailable",
+              description: "One or more runtime dependencies are unavailable",
+            },
+          },
+        },
+      },
+      "/metrics": {
+        get: {
+          summary: "Prometheus metrics endpoint",
+          responses: {
+            "200": {
+              description: "Prometheus-formatted metrics output",
+              content: {
+                "text/plain": {
+                  schema: {
+                    type: "string",
+                  },
+                },
+              },
             },
           },
         },
@@ -240,6 +257,14 @@ export function createOpenApiDocument() {
             },
             "401": {
               description: "Authentication failure",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorEnvelope" },
+                },
+              },
+            },
+            "403": {
+              description: "Authorization failure",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/ErrorEnvelope" },
@@ -308,6 +333,14 @@ export function createOpenApiDocument() {
                 },
               },
             },
+            "403": {
+              description: "Authorization failure",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorEnvelope" },
+                },
+              },
+            },
             "404": {
               description: "TV show not found",
               content: {
@@ -365,6 +398,14 @@ export function createOpenApiDocument() {
             },
             "401": {
               description: "Authentication failure",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorEnvelope" },
+                },
+              },
+            },
+            "403": {
+              description: "Authorization failure",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/ErrorEnvelope" },

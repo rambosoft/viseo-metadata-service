@@ -12,7 +12,8 @@
 
 - `Confirmed`: Viseo Metadata Service is a multi-tenant media metadata API.
 - `Confirmed`: The service resolves, normalizes, caches, and serves metadata for movies and TV shows.
-- `Confirmed`: TMDB and an IMDb-compatible provider are the MVP metadata sources.
+- `Confirmed`: TMDB is the only active metadata provider in the implemented MVP runtime.
+- `Deferred`: IMDb-compatible provider work remains planned behind a provider boundary, but is not currently implemented.
 - `Confirmed`: Redis is the MVP operational store for canonical snapshots, cached search results, lookup caches, and local fetched-record index state.
 - `Confirmed`: Authentication is external, but tenant context and auth caching are part of this service.
 

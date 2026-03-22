@@ -1,64 +1,66 @@
 import { z } from "zod";
 
+const nonEmptyString = z.string().min(1);
+
 const cachedBaseMediaRecordSchema = z.object({
-  mediaId: z.string(),
-  tenantId: z.string(),
-  canonicalTitle: z.string(),
-  originalTitle: z.string().optional(),
-  description: z.string().optional(),
-  genres: z.array(z.string()),
+  mediaId: nonEmptyString,
+  tenantId: nonEmptyString,
+  canonicalTitle: nonEmptyString,
+  originalTitle: nonEmptyString.optional(),
+  description: nonEmptyString.optional(),
+  genres: z.array(nonEmptyString),
   rating: z.number().optional(),
   cast: z.array(
     z.object({
-      name: z.string(),
-      role: z.string().optional()
+      name: nonEmptyString,
+      role: nonEmptyString.optional()
     })
   ),
   images: z.object({
-    posterUrl: z.string().optional(),
-    backdropUrl: z.string().optional()
+    posterUrl: nonEmptyString.optional(),
+    backdropUrl: nonEmptyString.optional()
   }),
   identifiers: z.object({
-    mediaId: z.string(),
-    tmdbId: z.string().optional(),
-    imdbId: z.string().optional()
+    mediaId: nonEmptyString,
+    tmdbId: nonEmptyString.optional(),
+    imdbId: nonEmptyString.optional()
   }),
   providerRefs: z.array(
     z.object({
       provider: z.union([z.literal("tmdb"), z.literal("imdb")]),
-      providerRecordId: z.string(),
-      normalizedAt: z.string(),
-      hash: z.string(),
+      providerRecordId: nonEmptyString,
+      normalizedAt: nonEmptyString,
+      hash: nonEmptyString,
       payload: z.record(z.unknown())
     })
   ),
-  contentHash: z.string(),
+  contentHash: nonEmptyString,
   freshness: z.object({
-    lastFetchedAt: z.string(),
+    lastFetchedAt: nonEmptyString,
     cacheTtlSeconds: z.number().int(),
-    staleAfter: z.string(),
-    refreshAfter: z.string(),
-    serveStaleUntil: z.string()
+    staleAfter: nonEmptyString,
+    refreshAfter: nonEmptyString,
+    serveStaleUntil: nonEmptyString
   }),
   schemaVersion: z.literal(1),
-  createdAt: z.string(),
-  updatedAt: z.string()
+  createdAt: nonEmptyString,
+  updatedAt: nonEmptyString
 });
 
 const cachedMovieMediaRecordSchema = cachedBaseMediaRecordSchema.extend({
   kind: z.literal("movie"),
-  releaseDate: z.string().optional(),
+  releaseDate: nonEmptyString.optional(),
   releaseYear: z.number().int().optional(),
   runtimeMinutes: z.number().int().optional()
 });
 
 const cachedTvMediaRecordSchema = cachedBaseMediaRecordSchema.extend({
   kind: z.literal("tv"),
-  firstAirDate: z.string().optional(),
+  firstAirDate: nonEmptyString.optional(),
   firstAirYear: z.number().int().optional(),
   seasonCount: z.number().int().optional(),
   episodeCount: z.number().int().optional(),
-  status: z.string().optional()
+  status: nonEmptyString.optional()
 });
 
 export const cachedMediaRecordSchema = z.discriminatedUnion("kind", [
@@ -67,55 +69,55 @@ export const cachedMediaRecordSchema = z.discriminatedUnion("kind", [
 ]);
 
 const cachedSearchItemSchema = z.object({
-  mediaId: z.string(),
-  tenantId: z.string(),
+  mediaId: nonEmptyString,
+  tenantId: nonEmptyString,
   kind: z.union([z.literal("movie"), z.literal("tv")]),
-  title: z.string(),
-  originalTitle: z.string().optional(),
-  description: z.string().optional(),
-  releaseDate: z.string().optional(),
+  title: nonEmptyString,
+  originalTitle: nonEmptyString.optional(),
+  description: nonEmptyString.optional(),
+  releaseDate: nonEmptyString.optional(),
   releaseYear: z.number().int().optional(),
-  firstAirDate: z.string().optional(),
+  firstAirDate: nonEmptyString.optional(),
   firstAirYear: z.number().int().optional(),
   rating: z.number().optional(),
-  genres: z.array(z.string()),
+  genres: z.array(nonEmptyString),
   images: z.object({
-    posterUrl: z.string().optional(),
-    backdropUrl: z.string().optional()
+    posterUrl: nonEmptyString.optional(),
+    backdropUrl: nonEmptyString.optional()
   }),
   identifiers: z.object({
-    mediaId: z.string(),
-    tmdbId: z.string().optional(),
-    imdbId: z.string().optional()
+    mediaId: nonEmptyString,
+    tmdbId: nonEmptyString.optional(),
+    imdbId: nonEmptyString.optional()
   })
 });
 
 export const cachedSearchSnapshotSchema = z.object({
-  tenantId: z.string(),
-  query: z.string(),
+  tenantId: nonEmptyString,
+  query: nonEmptyString,
   kind: z.union([z.literal("movie"), z.literal("tv")]).optional(),
-  lang: z.string(),
+  lang: nonEmptyString,
   page: z.number().int().positive(),
   pageSize: z.number().int().positive(),
   total: z.number().int().nonnegative().optional(),
   items: z.array(cachedSearchItemSchema),
-  sourceProviders: z.array(z.string()),
-  generatedAt: z.string(),
-  expiresAt: z.string()
+  sourceProviders: z.array(nonEmptyString),
+  generatedAt: nonEmptyString,
+  expiresAt: nonEmptyString
 });
 
 export const cachedSearchIndexDocumentSchema = z.object({
-  mediaId: z.string(),
-  tenantId: z.string(),
+  mediaId: nonEmptyString,
+  tenantId: nonEmptyString,
   kind: z.union([z.literal("movie"), z.literal("tv")]),
   item: cachedSearchItemSchema,
-  normalizedTitle: z.string(),
-  searchableTokens: z.array(z.string())
+  normalizedTitle: nonEmptyString,
+  searchableTokens: z.array(nonEmptyString)
 });
 
 export const cachedAuthContextSchema = z.object({
-  principalId: z.string(),
-  tenantId: z.string(),
-  scopes: z.array(z.string()),
-  expiresAt: z.string()
+  principalId: nonEmptyString,
+  tenantId: nonEmptyString,
+  scopes: z.array(nonEmptyString).min(1),
+  expiresAt: nonEmptyString
 });

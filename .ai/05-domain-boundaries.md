@@ -19,7 +19,7 @@
 - `Confirmed`: Snapshot storage and index state
   - Owns Redis persistence shapes, lookup caches, search snapshots, and fetched-record search acceleration.
 - `Confirmed`: Background refresh
-  - Owns stale refresh, cleanup, retry, and warmup job flows.
+  - Owns stale refresh, cleanup, retry-safe enqueue, and warmup job flows.
 - `Confirmed`: Observability and runtime config
   - Owns logs, metrics, health, readiness, config validation, and shutdown behavior.
 

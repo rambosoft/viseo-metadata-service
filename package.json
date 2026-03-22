@@ -2,7 +2,7 @@
   "name": "viseo-metadata-service",
   "version": "0.1.0",
   "private": true,
-  "description": "Redis-first metadata service first vertical slice",
+  "description": "Redis-first multi-tenant metadata service with lookup, search, and background refresh",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:redis": "vitest run tests/integration/real-redis.integration.test.ts",
+    "test:performance": "vitest run --dir tests/performance",
     "test:watch": "vitest",
     "start": "node dist/main.js",
     "start:api": "node dist/main.js",
@@ -22,6 +23,7 @@
     "express": "^5.1.0",
     "ioredis": "^5.4.1",
     "pino": "^9.3.2",
+    "prom-client": "^15.1.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {

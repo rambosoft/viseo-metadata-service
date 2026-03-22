@@ -1,19 +1,23 @@
 # Viseo Metadata Service
 
-Current implemented slices:
+Redis-first multi-tenant metadata API for movie and TV lookup and search. The current baseline includes:
 - validated config bootstrap
 - Pino structured logging
+- Prometheus metrics endpoint and request/provider/cache instrumentation
 - Redis-backed auth validation cache
 - Redis-backed canonical movie/TV snapshots, hot lookup pointers, search snapshots, and local fetched-record index
 - TMDB movie, TV, and mixed search flows
 - BullMQ-backed stale refresh flow and worker runtime
+- BullMQ-backed stale refresh, derived-cache cleanup, and hot-record warmup job flows
 - stale-but-servable lookup fallback for movie and TV records
 - Redis-backed cross-instance lookup miss coordination
+- readiness reporting for Redis and BullMQ dependencies
 - `GET /api/v1/media/movie`
 - `GET /api/v1/media/tv`
 - `GET /api/v1/media/search`
 - `GET /health/live`
 - `GET /health/ready`
+- `GET /metrics`
 
 ## Stack
 
@@ -63,14 +67,16 @@ Current implemented slices:
    - `WORKER_SHUTDOWN_TIMEOUT_MS`
 4. Build: `npm.cmd run build`
 5. Test: `npm.cmd test`
-6. Start API: `npm.cmd run start:api`
-7. Start worker: `npm.cmd run start:worker`
-8. Optional real Redis integration tests: `npm.cmd run test:redis`
+6. Performance checks: `npm.cmd run test:performance`
+7. Start API: `npm.cmd run start:api`
+8. Start worker: `npm.cmd run start:worker`
+9. Optional real Redis integration tests: `npm.cmd run test:redis`
 
 ## Current Endpoints
 
 - `GET /health/live`
 - `GET /health/ready`
+- `GET /metrics`
 - `GET /openapi.json`
 - `GET /api/v1/media/movie?tmdbId=550`
 - `GET /api/v1/media/movie?imdbId=tt0137523`
@@ -88,5 +94,43 @@ Current implemented slices:
 - Redis is the only state store in this slice
 - Authenticated metadata lookup and search routes are tenant-aware and rate-limited
 - Lookup routes support stale fallback and background refresh for movie and TV records
+- Authenticated routes may return `403` when the upstream auth service denies authorization
 - IMDb-compatible enrichment is still deferred pending approved commercial provider choice
 - No channel support yet
+
+## Operations
+
+- `GET /health/live` checks process liveness only.
+- `GET /health/ready` reflects Redis and BullMQ dependency state for the API runtime.
+- `GET /metrics` exposes Prometheus text metrics.
+- `GET /openapi.json` exposes the live OpenAPI document.
+- Run the worker alongside the API if you want stale refresh, cleanup, and warmup jobs to be processed.
+
+## Startup And Shutdown
+
+- API process: `npm.cmd run start:api`
+- Worker process: `npm.cmd run start:worker`
+- Both runtimes handle `SIGINT` and `SIGTERM` and perform bounded graceful shutdown.
+- In production, stop routing traffic to the API before process termination and keep a worker running for background refresh continuity.
+
+## Docker
+
+Build the image:
+
+```bash
+docker build -t viseo-metadata-service .
+```
+
+Run the API process:
+
+```bash
+docker run --rm -p 3000:3000 --env-file .env viseo-metadata-service
+```
+
+Run the worker process:
+
+```bash
+docker run --rm --env-file .env viseo-metadata-service node dist/worker.js
+```
+
+The image is multi-stage, runs as non-root, and defaults to the API command. The worker uses the same image with an overridden command.

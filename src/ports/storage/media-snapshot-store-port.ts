@@ -26,6 +26,13 @@ export interface MediaSnapshotStorePort {
     identifier: LookupIdentifier,
   ): Promise<CachedMediaLookup | null>;
   putSnapshot(record: MediaRecord): Promise<void>;
+  promoteRecord(record: MediaRecord): Promise<void>;
+  cleanupDerivedState(args: {
+    tenantId: TenantId;
+    kind: MediaKind;
+    mediaId: string;
+    identifiers: MediaRecord["identifiers"];
+  }): Promise<{ removed: number }>;
   getSearchSnapshot(
     tenantId: TenantId,
     fingerprint: SearchRequestFingerprint,

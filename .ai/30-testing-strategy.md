@@ -12,7 +12,7 @@
 
 - `Confirmed`: Unit tests for normalization, hashing, freshness, and key-building logic.
 - `Confirmed`: Integration tests for Redis repositories, auth cache behavior, and BullMQ job flows.
-- `Confirmed`: Contract tests for TMDB and IMDb-compatible adapters.
+- `Confirmed`: Contract tests for the implemented TMDB adapter and any future provider adapters once approved.
 - `Confirmed`: Route tests for lookup, search, auth failure, rate limiting, and stale fallback.
 - `Confirmed`: Performance tests for hot-cache lookup, concurrent deduplication, and stale-refresh behavior.
 

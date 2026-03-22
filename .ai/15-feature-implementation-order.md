@@ -23,14 +23,17 @@
 11. `Deferred`: IMDb-compatible adapter and identifier enrichment path pending commercially approved provider
 12. `Confirmed`: Background refresh, cleanup, retry, and warmup jobs
 13. `Confirmed`: Metrics, readiness detail, stale fallback logic, performance tests
-14. `Confirmed`: Final documentation truth check against implemented behavior
+14. `Confirmed`: Final documentation truth check, deployment polish, and performance closeout
+15. `Next`: Real-environment Redis and BullMQ validation plus any remaining operational hardening
 
 ## Sequencing Rules
 
 - `Confirmed`: Build the movie lookup path as the first full vertical slice.
 - `Confirmed`: Movie lookup, TV lookup, and search are now the implemented parity baseline.
 - `Confirmed`: Search, stale fallback, and refresh flow are now the implemented parity baseline.
-- `Confirmed`: The next delivery slice is metrics, readiness detail, resilience, and performance hardening.
+- `Confirmed`: Metrics, readiness detail, resilience, Docker packaging, and performance verification are now the implemented hardening baseline.
+- `Confirmed`: The current parity baseline includes queue-backed refresh, cleanup, and warmup support.
+- `Confirmed`: The next delivery slice is real-environment dependency validation and any remaining operational hardening, not a new metadata domain.
 - `Confirmed`: IMDb-compatible adapter work remains deferred until a commercially approved provider is selected.
 - `Confirmed`: Do not build `channel` endpoints in MVP.
 - `Confirmed`: Do not add new providers before TMDB and the IMDb-compatible path are stable.

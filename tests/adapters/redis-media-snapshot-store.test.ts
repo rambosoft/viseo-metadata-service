@@ -250,4 +250,66 @@ describe("RedisMediaSnapshotStore", () => {
     expect(found?.state).toBe("stale_but_servable");
     expect(found?.record.canonicalTitle).toBe("Fight Club");
   });
+
+  it("evicts corrupted search snapshots on read", async () => {
+    const redis = new Redis();
+    const keyBuilder = new RedisKeyBuilder("md");
+    const store = new RedisMediaSnapshotStore(
+      redis as never,
+      keyBuilder,
+      fixedClock,
+      604800,
+      900,
+      21600,
+    );
+    const fingerprint = buildSearchRequestFingerprint({
+      tenantId: "tenant_1",
+      q: "Fight Club",
+      lang: "en" as never,
+      page: 1,
+      pageSize: 20,
+    });
+    const key = keyBuilder.searchSnapshot("tenant_1" as never, fingerprint);
+    await redis.set(key, "{bad-json");
+
+    const found = await store.getSearchSnapshot("tenant_1" as never, fingerprint);
+
+    expect(found).toBeNull();
+    expect(await redis.get(key)).toBeNull();
+  });
+
+  it("cleans up derived hot lookup and search index state without deleting the canonical record", async () => {
+    const redis = new Redis();
+    const keyBuilder = new RedisKeyBuilder("md");
+    const store = new RedisMediaSnapshotStore(
+      redis as never,
+      keyBuilder,
+      fixedClock,
+      604800,
+      900,
+      21600,
+    );
+    const record = buildMovieRecord();
+    await store.putSnapshot(record);
+
+    const result = await store.cleanupDerivedState({
+      tenantId: record.tenantId,
+      kind: record.kind,
+      mediaId: record.mediaId,
+      identifiers: record.identifiers,
+    });
+
+    expect(result.removed).toBeGreaterThan(0);
+    expect(
+      await redis.get(
+        keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
+          type: "tmdbId",
+          value: "550",
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      await redis.get(keyBuilder.mediaRecord(record.tenantId, record.kind, record.mediaId)),
+    ).not.toBeNull();
+  });
 });

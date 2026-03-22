@@ -31,6 +31,14 @@ export class MediaLookupService {
       enqueued: false,
       jobId: `noop:${job.mediaId}`,
     }),
+    enqueueExpiredCacheCleanup: async (job) => ({
+      enqueued: false,
+      jobId: `noop:cleanup:${job.mediaId}`,
+    }),
+    enqueueHotRecordWarmup: async (job) => ({
+      enqueued: false,
+      jobId: `noop:warmup:${job.mediaId}`,
+    }),
   };
 
   private static readonly noopLookupCoordinator: LookupCoordinatorPort = {
@@ -186,6 +194,10 @@ export class MediaLookupService {
         operation: "lookup",
         success: false,
       });
+      this.metrics.increment("metadata_provider_failure", {
+        provider: "tmdb",
+        operation: "lookup",
+      });
 
       const fallback = await this.snapshotStorePort.getLookup(
         authContext.tenantId,
@@ -237,7 +249,9 @@ export class MediaLookupService {
 
   private async enqueueRefresh(record: MediaRecord, language: ReturnType<typeof toLocaleCode>): Promise<void> {
     const result = await this.refreshQueuePort.enqueueRecordRefresh({
+      jobType: "refresh_media_record",
       tenantId: record.tenantId,
+      requestedAt: new Date().toISOString(),
       kind: record.kind,
       mediaId: record.mediaId,
       identifiers: record.identifiers,

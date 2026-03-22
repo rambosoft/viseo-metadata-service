@@ -22,7 +22,7 @@
 | Validation | Zod | Confirmed |
 | Logging | Pino JSON logs | Confirmed |
 | API docs | OpenAPI 3.1 | Confirmed |
-| Containers | Docker and Docker Compose | Confirmed |
+| Containers | Docker multi-stage image | Confirmed |
 
 ## Rejected For MVP
 
@@ -30,6 +30,7 @@
 - `Confirmed`: Axios is not the default HTTP client.
 - `Confirmed`: Winston is not the canonical logger.
 - `Confirmed`: BullMQ 3-era guidance is stale and not authoritative.
+- `Deferred`: Docker Compose is not required by the current canonical runtime.
 
 ## Selection Rules
 

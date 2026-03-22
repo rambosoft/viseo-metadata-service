@@ -1,6 +1,7 @@
 import type { Redis as RedisClient } from "ioredis";
 
 import { RateLimitedError } from "../../core/shared/errors.js";
+import type { MetricsPort } from "../../ports/observability/metrics-port.js";
 import { RedisKeyBuilder } from "../redis-store/redis-key-builder.js";
 import type {
   ConsumeRateLimitArgs,
@@ -15,10 +16,16 @@ type RedisRateLimiterConfig = Readonly<{
 }>;
 
 export class RedisRateLimiter implements RateLimiterPort {
+  private static readonly noopMetrics: MetricsPort = {
+    increment: () => undefined,
+    observe: () => undefined,
+  };
+
   public constructor(
     private readonly redis: RateLimiterRedisClient,
     private readonly keyBuilder: RedisKeyBuilder,
     private readonly config: RedisRateLimiterConfig,
+    private readonly metrics: MetricsPort = RedisRateLimiter.noopMetrics,
   ) {}
 
   public async consume(args: ConsumeRateLimitArgs): Promise<void> {
@@ -37,6 +44,7 @@ export class RedisRateLimiter implements RateLimiterPort {
     }
 
     if (currentCount > this.config.maxRequests) {
+      this.metrics.increment("rate_limit_rejected", { route: args.route });
       throw new RateLimitedError("Rate limit exceeded");
     }
   }

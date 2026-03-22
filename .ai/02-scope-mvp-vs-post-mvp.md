@@ -13,7 +13,6 @@
 - `Confirmed`: Bearer-token validation through an external auth adapter.
 - `Confirmed`: Tenant-aware Redis keying and auth-context propagation.
 - `Confirmed`: TMDB provider adapter.
-- `Confirmed`: IMDb-compatible provider adapter.
 - `Confirmed`: Canonical lookup by `mediaId`, `tmdbId`, or `imdbId`.
 - `Confirmed`: Provider-backed search with cached results.
 - `Confirmed`: Redis-backed local index over previously fetched records only.
@@ -33,6 +32,6 @@
 ## Post-MVP Candidates
 
 - `Needs clarification`: Approved channel-capable provider and channel metadata support.
-- `Needs clarification`: Vendor-specific IMDb-compatible provider binding.
+- `Deferred`: Vendor-specific IMDb-compatible provider binding.
 - `Needs clarification`: Query warmup, broader prefetching, and ranking improvements.
 - `Needs clarification`: Additional providers and override data.

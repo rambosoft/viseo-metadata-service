@@ -18,6 +18,7 @@
 
 - `Confirmed`: `GET /health/live`
 - `Confirmed`: `GET /health/ready`
+- `Confirmed`: `GET /metrics`
 - `Confirmed`: `GET /openapi.json`
 - `Proposed`: `GET /docs`
 
@@ -70,7 +71,7 @@
 - `Confirmed`: `200` success
 - `Confirmed`: `400` validation failure
 - `Confirmed`: `401` authentication failure
-- `Confirmed`: `403` authorization failure
+- `Confirmed`: `403` authorization failure when the upstream auth service denies access
 - `Confirmed`: `404` not found
 - `Confirmed`: `429` rate limited
 - `Confirmed`: `502` provider dependency failure when no safe fallback exists

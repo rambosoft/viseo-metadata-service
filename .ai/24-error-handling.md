@@ -26,6 +26,7 @@
 - `Confirmed`: If no safe cached or canonical data exists, fail with a dependency/provider error instead of inventing partial data.
 - `Confirmed`: Validation and auth errors are never retriable by the service itself.
 - `Confirmed`: Background refresh failures do not mutate the last known good record.
+- `Confirmed`: Upstream auth `403` is surfaced as `authorization_failed`, not collapsed into `authentication_failed`.
 
 ## Logging Rules
 

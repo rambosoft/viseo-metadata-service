@@ -1,9 +1,9 @@
-import { NotFoundError } from "../../core/shared/errors.js";
 import type { LoggerPort } from "../../ports/observability/logger-port.js";
 import type { MetricsPort } from "../../ports/observability/metrics-port.js";
 import type { MetadataProviderPort } from "../../ports/providers/metadata-provider-port.js";
 import type { MediaSnapshotStorePort } from "../../ports/storage/media-snapshot-store-port.js";
 import type { RefreshMediaJob } from "../../ports/refresh/refresh-queue-port.js";
+import type { MediaRecord } from "../../core/media/types.js";
 
 const noopLogger: LoggerPort = {
   info: () => undefined,
@@ -24,7 +24,7 @@ export class MediaRefreshService {
     private readonly metrics: MetricsPort = noopMetrics,
   ) {}
 
-  public async execute(job: RefreshMediaJob): Promise<{ updated: boolean }> {
+  public async execute(job: RefreshMediaJob): Promise<{ updated: boolean; outcome: "rewritten" | "unchanged" }> {
     const identifier =
       job.identifiers.tmdbId !== undefined
         ? { type: "tmdbId" as const, value: job.identifiers.tmdbId }
@@ -45,11 +45,15 @@ export class MediaRefreshService {
         kind: job.kind,
         reason: "missing_identifier",
       });
-      return { updated: false };
+      return { updated: false, outcome: "unchanged" };
     }
 
     const startedAt = Date.now();
     try {
+      const current = await this.snapshotStorePort.getLookup(job.tenantId, job.kind, {
+        type: "mediaId",
+        value: job.mediaId,
+      });
       const providerResult = await this.metadataProviderPort.lookupByIdentifier({
         tenantId: job.tenantId,
         kind: job.kind,
@@ -75,29 +79,43 @@ export class MediaRefreshService {
           kind: job.kind,
           reason: "provider_not_found",
         });
-        return { updated: false };
+        return { updated: false, outcome: "unchanged" };
       }
 
-      await this.snapshotStorePort.putSnapshot(providerResult.record);
+      const mergedRecord =
+        current !== null
+          ? this.mergeRefreshedRecord(current.record, providerResult.record)
+          : providerResult.record;
+      const rewritten = current?.record.contentHash !== providerResult.record.contentHash;
+      await this.snapshotStorePort.putSnapshot(mergedRecord);
       this.logger.info(
         {
           tenantId: job.tenantId,
           mediaId: job.mediaId,
           kind: job.kind,
           provider: providerResult.provider,
+          refreshOutcome: rewritten ? "rewritten" : "unchanged",
         },
         "Refresh completed successfully",
       );
       this.metrics.increment("metadata_refresh_succeeded", {
         kind: job.kind,
         provider: providerResult.provider,
+        refresh_outcome: rewritten ? "rewritten" : "unchanged",
       });
-      return { updated: true };
+      return {
+        updated: rewritten,
+        outcome: rewritten ? "rewritten" : "unchanged",
+      };
     } catch (error) {
       this.metrics.observe("provider_latency_ms", Date.now() - startedAt, {
         provider: "tmdb",
         operation: "refresh_lookup",
         success: false,
+      });
+      this.metrics.increment("metadata_provider_failure", {
+        provider: "tmdb",
+        operation: "refresh_lookup",
       });
       this.metrics.increment("metadata_refresh_failed", {
         kind: job.kind,
@@ -113,5 +131,30 @@ export class MediaRefreshService {
       );
       throw error;
     }
+  }
+
+  private mergeRefreshedRecord(current: MediaRecord, incoming: MediaRecord): MediaRecord {
+    const base = {
+      ...incoming,
+      mediaId: current.mediaId,
+      createdAt: current.createdAt,
+      identifiers: {
+        ...current.identifiers,
+        ...incoming.identifiers,
+        mediaId: current.mediaId,
+      },
+    } satisfies MediaRecord;
+
+    if (current.contentHash === incoming.contentHash) {
+      return {
+        ...current,
+        freshness: incoming.freshness,
+        providerRefs: incoming.providerRefs,
+        updatedAt: incoming.updatedAt,
+        identifiers: base.identifiers,
+      } satisfies MediaRecord;
+    }
+
+    return base;
   }
 }

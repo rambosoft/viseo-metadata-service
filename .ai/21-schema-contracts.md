@@ -60,7 +60,7 @@
 
 ## Auth Context
 
-- `Proposed`: Fields
+- `Confirmed`: Fields
   - `principalId`
   - `tenantId`
   - `scopes`
@@ -69,8 +69,8 @@
 ## Job Payloads
 
 - `Confirmed`: `refresh_media_record`
-  - `tenantId`, `mediaId`, `kind`, `reason`, `requestedAt`
+  - `jobType`, `tenantId`, `mediaId`, `kind`, `identifiers`, `language`, `source`, `requestedAt`
 - `Confirmed`: `cleanup_expired_cache`
-  - `tenantId`, `requestedAt`
+  - `jobType`, `tenantId`, `mediaId`, `kind`, `identifiers`, `source`, `requestedAt`
 - `Confirmed`: `warm_hot_record`
-  - `tenantId`, `mediaId`, `kind`, `requestedAt`
+  - `jobType`, `tenantId`, `mediaId`, `kind`, `identifiers`, `language`, `source`, `requestedAt`

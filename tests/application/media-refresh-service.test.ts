@@ -38,6 +38,7 @@ function buildRecord(): MediaRecord {
 describe("MediaRefreshService", () => {
   it("refreshes a record through the provider and rewrites the snapshot", async () => {
     const snapshotStore = {
+      getLookup: vi.fn().mockResolvedValue(null),
       putSnapshot: vi.fn().mockResolvedValue(undefined),
     };
     const record = buildRecord();
@@ -53,7 +54,9 @@ describe("MediaRefreshService", () => {
     );
 
     const result = await service.execute({
+      jobType: "refresh_media_record",
       tenantId: "tenant_1" as never,
+      requestedAt: "2026-01-01T00:00:00.000Z",
       kind: "movie",
       mediaId: "med_1",
       identifiers: record.identifiers,
@@ -62,11 +65,13 @@ describe("MediaRefreshService", () => {
     });
 
     expect(result.updated).toBe(true);
+    expect(result.outcome).toBe("rewritten");
     expect(snapshotStore.putSnapshot).toHaveBeenCalledWith(record);
   });
 
   it("skips refresh when no provider identifier is present", async () => {
     const snapshotStore = {
+      getLookup: vi.fn().mockResolvedValue(null),
       putSnapshot: vi.fn().mockResolvedValue(undefined),
     };
     const provider = {
@@ -78,7 +83,9 @@ describe("MediaRefreshService", () => {
     );
 
     const result = await service.execute({
+      jobType: "refresh_media_record",
       tenantId: "tenant_1" as never,
+      requestedAt: "2026-01-01T00:00:00.000Z",
       kind: "movie",
       mediaId: "med_1",
       identifiers: {
@@ -89,6 +96,60 @@ describe("MediaRefreshService", () => {
     });
 
     expect(result.updated).toBe(false);
+    expect(result.outcome).toBe("unchanged");
     expect(provider.lookupByIdentifier).not.toHaveBeenCalled();
+  });
+
+  it("preserves identity and records an unchanged refresh when content hash matches", async () => {
+    const current = buildRecord();
+    const incoming = {
+      ...buildRecord(),
+      createdAt: "2026-02-01T00:00:00.000Z",
+      updatedAt: "2026-02-01T00:00:00.000Z",
+      freshness: {
+        ...buildRecord().freshness,
+        lastFetchedAt: "2026-02-01T00:00:00.000Z",
+      },
+    };
+    const snapshotStore = {
+      getLookup: vi.fn().mockResolvedValue({
+        record: current,
+        state: "stale_but_servable",
+        source: "cache",
+      }),
+      putSnapshot: vi.fn().mockResolvedValue(undefined),
+    };
+    const provider = {
+      lookupByIdentifier: vi.fn().mockResolvedValue({
+        provider: "tmdb",
+        record: incoming,
+      }),
+    };
+    const service = new MediaRefreshService(
+      snapshotStore as never,
+      provider as never,
+    );
+
+    const result = await service.execute({
+      jobType: "refresh_media_record",
+      tenantId: "tenant_1" as never,
+      requestedAt: "2026-01-01T00:00:00.000Z",
+      kind: "movie",
+      mediaId: "med_1",
+      identifiers: current.identifiers,
+      language: "en" as never,
+      source: "stale_lookup",
+    });
+
+    expect(result.updated).toBe(false);
+    expect(result.outcome).toBe("unchanged");
+    expect(snapshotStore.putSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mediaId: current.mediaId,
+        createdAt: current.createdAt,
+        updatedAt: incoming.updatedAt,
+        contentHash: current.contentHash,
+      }),
+    );
   });
 });

@@ -1,0 +1,11 @@
+.git
+.ai
+node_modules
+dist
+tests
+npm-debug.log
+.github
+.vscode
+coverage
+*.log
+.env

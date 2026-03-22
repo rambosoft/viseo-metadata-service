@@ -45,7 +45,7 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
   public constructor(
     private readonly redis: Pick<
       RedisClient,
-      "expire" | "get" | "mget" | "ping" | "sadd" | "setex" | "smembers" | "srem"
+      "del" | "expire" | "get" | "mget" | "ping" | "sadd" | "setex" | "smembers" | "srem"
     >,
     private readonly keyBuilder: RedisKeyBuilder,
     private readonly clockPort: ClockPort,
@@ -74,65 +74,66 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
   public async putSnapshot(record: MediaRecord): Promise<void> {
     const recordKey = this.keyBuilder.mediaRecord(record.tenantId, record.kind, record.mediaId);
     const serializedRecord = JSON.stringify(record);
-    const hotTtlSeconds = record.freshness.cacheTtlSeconds;
 
     await this.redis.setex(recordKey, this.canonicalTtlSeconds, serializedRecord);
-    await this.redis.setex(
-      this.keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
-        type: "mediaId",
-        value: record.mediaId
-      }),
-      hotTtlSeconds,
-      recordKey
-    );
-    await this.redis.setex(
-      this.keyBuilder.mediaLookupCanonical(record.tenantId, record.kind, {
-        type: "mediaId",
-        value: record.mediaId
-      }),
-      this.canonicalTtlSeconds,
-      recordKey
-    );
-
-    if (record.identifiers.tmdbId !== undefined) {
-      await this.redis.setex(
-        this.keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
-          type: "tmdbId",
-          value: record.identifiers.tmdbId
-        }),
-        hotTtlSeconds,
-        recordKey
-      );
-      await this.redis.setex(
-        this.keyBuilder.mediaLookupCanonical(record.tenantId, record.kind, {
-          type: "tmdbId",
-          value: record.identifiers.tmdbId
-        }),
-        this.canonicalTtlSeconds,
-        recordKey
-      );
-    }
-
-    if (record.identifiers.imdbId !== undefined) {
-      await this.redis.setex(
-        this.keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
-          type: "imdbId",
-          value: record.identifiers.imdbId
-        }),
-        hotTtlSeconds,
-        recordKey
-      );
-      await this.redis.setex(
-        this.keyBuilder.mediaLookupCanonical(record.tenantId, record.kind, {
-          type: "imdbId",
-          value: record.identifiers.imdbId
-        }),
-        this.canonicalTtlSeconds,
-        recordKey
-      );
-    }
-
+    await this.writeLookupPointers(record, recordKey, true);
     await this.upsertSearchIndexItems([toSearchResultItem(record)]);
+  }
+
+  public async promoteRecord(record: MediaRecord): Promise<void> {
+    const recordKey = this.keyBuilder.mediaRecord(record.tenantId, record.kind, record.mediaId);
+    await this.writeLookupPointers(record, recordKey, false);
+    await this.upsertSearchIndexItems([toSearchResultItem(record)]);
+  }
+
+  public async cleanupDerivedState(args: {
+    tenantId: TenantId;
+    kind: MediaKind;
+    mediaId: string;
+    identifiers: MediaRecord["identifiers"];
+  }): Promise<{ removed: number }> {
+    const keysToDelete = [
+      this.keyBuilder.mediaLookupHot(args.tenantId, args.kind, {
+        type: "mediaId",
+        value: args.mediaId,
+      }),
+    ];
+    if (args.identifiers.tmdbId !== undefined) {
+      keysToDelete.push(
+        this.keyBuilder.mediaLookupHot(args.tenantId, args.kind, {
+          type: "tmdbId",
+          value: args.identifiers.tmdbId,
+        }),
+      );
+    }
+    if (args.identifiers.imdbId !== undefined) {
+      keysToDelete.push(
+        this.keyBuilder.mediaLookupHot(args.tenantId, args.kind, {
+          type: "imdbId",
+          value: args.identifiers.imdbId,
+        }),
+      );
+    }
+
+    const documentKey = this.keyBuilder.searchIndexDocument(args.tenantId, args.mediaId);
+    const documentPayload = await this.redis.get(documentKey);
+    if (documentPayload !== null) {
+      try {
+        const parsed = cachedSearchIndexDocumentSchema.parse(JSON.parse(documentPayload));
+        for (const token of parsed.searchableTokens) {
+          await this.redis.srem(
+            this.keyBuilder.searchIndexToken(args.tenantId, parsed.kind, token),
+            args.mediaId,
+          );
+        }
+      } catch {
+        // If the index document is corrupt, delete it and continue cleaning derived state.
+      }
+    }
+    keysToDelete.push(documentKey);
+
+    const removed = await this.safeDelete(...keysToDelete);
+    return { removed };
   }
 
   public async getSearchSnapshot(
@@ -152,6 +153,7 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
         source: "cache",
       };
     } catch {
+      await this.safeDelete(key);
       return null;
     }
   }
@@ -209,24 +211,23 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
     );
     const documentPayloads = await this.redis.mget(...documentKeys);
 
-    const scoredItems = documentPayloads.flatMap((payload) => {
+    const scoredItems: Array<{ item: SearchResultItem; score: number }> = [];
+    for (const [index, payload] of documentPayloads.entries()) {
       if (payload === null) {
-        return [];
+        continue;
       }
 
       try {
         const parsed = cachedSearchIndexDocumentSchema.parse(JSON.parse(payload));
         const item = this.rehydrateSearchItem(parsed.item);
-        return [
-          {
-            item,
-            score: scoreSearchItem(item, normalizedQuery, queryTokens),
-          },
-        ];
+        scoredItems.push({
+          item,
+          score: scoreSearchItem(item, normalizedQuery, queryTokens),
+        });
       } catch {
-        return [];
+        await this.safeDelete(documentKeys[index] ?? "");
       }
-    });
+    }
 
     const filtered = scoredItems
       .filter((entry) => entry.score > 0)
@@ -265,7 +266,7 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
             );
           }
         } catch {
-          // Ignore corrupted index documents and replace them.
+          await this.safeDelete(documentKey);
         }
       }
 
@@ -313,11 +314,12 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
       return null;
     }
 
-    const maybeRecordJson = recordKeyOrPayload.startsWith("{")
-      ? recordKeyOrPayload
-      : await this.redis.get(recordKeyOrPayload);
+    const inlinePayload = recordKeyOrPayload.startsWith("{");
+    const recordKey = inlinePayload ? null : recordKeyOrPayload;
+    const maybeRecordJson = inlinePayload ? recordKeyOrPayload : await this.redis.get(recordKeyOrPayload);
 
     if (maybeRecordJson === null) {
+      await this.safeDelete(key);
       return null;
     }
 
@@ -343,8 +345,87 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
 
       return null;
     } catch {
+      await this.safeDelete(...(recordKey !== null ? [key, recordKey] : [key]));
       return null;
     }
+  }
+
+  private async writeLookupPointers(
+    record: MediaRecord,
+    recordKey: string,
+    includeCanonicalPointers: boolean,
+  ): Promise<void> {
+    const hotTtlSeconds = record.freshness.cacheTtlSeconds;
+
+    await this.redis.setex(
+      this.keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
+        type: "mediaId",
+        value: record.mediaId,
+      }),
+      hotTtlSeconds,
+      recordKey,
+    );
+    if (includeCanonicalPointers) {
+      await this.redis.setex(
+        this.keyBuilder.mediaLookupCanonical(record.tenantId, record.kind, {
+          type: "mediaId",
+          value: record.mediaId,
+        }),
+        this.canonicalTtlSeconds,
+        recordKey,
+      );
+    }
+
+    if (record.identifiers.tmdbId !== undefined) {
+      await this.redis.setex(
+        this.keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
+          type: "tmdbId",
+          value: record.identifiers.tmdbId,
+        }),
+        hotTtlSeconds,
+        recordKey,
+      );
+      if (includeCanonicalPointers) {
+        await this.redis.setex(
+          this.keyBuilder.mediaLookupCanonical(record.tenantId, record.kind, {
+            type: "tmdbId",
+            value: record.identifiers.tmdbId,
+          }),
+          this.canonicalTtlSeconds,
+          recordKey,
+        );
+      }
+    }
+
+    if (record.identifiers.imdbId !== undefined) {
+      await this.redis.setex(
+        this.keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
+          type: "imdbId",
+          value: record.identifiers.imdbId,
+        }),
+        hotTtlSeconds,
+        recordKey,
+      );
+      if (includeCanonicalPointers) {
+        await this.redis.setex(
+          this.keyBuilder.mediaLookupCanonical(record.tenantId, record.kind, {
+            type: "imdbId",
+            value: record.identifiers.imdbId,
+          }),
+          this.canonicalTtlSeconds,
+          recordKey,
+        );
+      }
+    }
+  }
+
+  private async safeDelete(...keys: string[]): Promise<number> {
+    const filtered = keys.filter((key) => key.length > 0);
+    if (filtered.length === 0) {
+      return 0;
+    }
+
+    return this.redis.del(...filtered);
   }
 
   private rehydrateRecord(

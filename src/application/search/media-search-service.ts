@@ -1,4 +1,5 @@
 import type { AuthValidationPort } from "../../ports/auth/auth-validation-port.js";
+import type { MetricsPort } from "../../ports/observability/metrics-port.js";
 import type { MetadataProviderPort } from "../../ports/providers/metadata-provider-port.js";
 import type { RateLimiterPort } from "../../ports/rate-limit/rate-limiter-port.js";
 import type { ClockPort } from "../../ports/shared/clock-port.js";
@@ -23,6 +24,11 @@ export type MediaSearchResult = Readonly<{
 }>;
 
 export class MediaSearchService {
+  private static readonly noopMetrics: MetricsPort = {
+    increment: () => undefined,
+    observe: () => undefined,
+  };
+
   public constructor(
     private readonly authValidationPort: AuthValidationPort,
     private readonly snapshotStorePort: MediaSnapshotStorePort,
@@ -30,6 +36,7 @@ export class MediaSearchService {
     private readonly rateLimiterPort: RateLimiterPort,
     private readonly clockPort: ClockPort,
     private readonly snapshotTtlSeconds: number,
+    private readonly metrics: MetricsPort = MediaSearchService.noopMetrics,
   ) {}
 
   public async execute(args: {
@@ -66,6 +73,7 @@ export class MediaSearchService {
       fingerprint,
     );
     if (cached !== null) {
+      this.metrics.increment("metadata_search_source", { source: "cache" });
       return {
         items: cached.snapshot.items,
         page: cached.snapshot.page,
@@ -95,6 +103,7 @@ export class MediaSearchService {
         }),
       );
 
+      this.metrics.increment("metadata_search_source", { source: "index" });
       return {
         items: localIndexResult.items,
         page: searchQuery.page,
@@ -106,14 +115,34 @@ export class MediaSearchService {
       };
     }
 
-    const providerResult = await this.metadataProviderPort.search({
-      tenantId: authContext.tenantId,
-      ...(searchQuery.kind !== undefined ? { kind: searchQuery.kind } : {}),
-      query: searchQuery.q,
-      language: searchQuery.lang,
-      page: searchQuery.page,
-      pageSize: searchQuery.pageSize,
-    });
+    const providerStartedAt = Date.now();
+    let providerResult;
+    try {
+      providerResult = await this.metadataProviderPort.search({
+        tenantId: authContext.tenantId,
+        ...(searchQuery.kind !== undefined ? { kind: searchQuery.kind } : {}),
+        query: searchQuery.q,
+        language: searchQuery.lang,
+        page: searchQuery.page,
+        pageSize: searchQuery.pageSize,
+      });
+      this.metrics.observe("provider_latency_ms", Date.now() - providerStartedAt, {
+        provider: providerResult.provider,
+        operation: "search",
+        success: true,
+      });
+    } catch (error) {
+      this.metrics.observe("provider_latency_ms", Date.now() - providerStartedAt, {
+        provider: "tmdb",
+        operation: "search",
+        success: false,
+      });
+      this.metrics.increment("metadata_provider_failure", {
+        provider: "tmdb",
+        operation: "search",
+      });
+      throw error;
+    }
 
     await this.snapshotStorePort.upsertSearchIndexItems(providerResult.items);
     await this.snapshotStorePort.putSearchSnapshot(
@@ -129,6 +158,7 @@ export class MediaSearchService {
       }),
     );
 
+    this.metrics.increment("metadata_search_source", { source: "provider" });
     return {
       items: providerResult.items,
       page: searchQuery.page,

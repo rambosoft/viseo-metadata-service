@@ -1,24 +1,46 @@
 import { Worker, type WorkerOptions } from "bullmq";
 
-import type { RefreshMediaJob } from "../../ports/refresh/refresh-queue-port.js";
-import { refreshMediaJobSchema } from "../../application/refresh/refresh-job-schema.js";
-import { REFRESH_JOB_NAME } from "./bullmq-refresh-queue.js";
+import type { MetadataQueueJob } from "../../ports/refresh/refresh-queue-port.js";
+import {
+  cleanupExpiredCacheJobSchema,
+  refreshMediaJobSchema,
+  warmHotRecordJobSchema,
+} from "../../application/refresh/refresh-job-schema.js";
+import {
+  CLEANUP_JOB_NAME,
+  REFRESH_JOB_NAME,
+  WARMUP_JOB_NAME,
+} from "./bullmq-refresh-queue.js";
 
 export function createBullMqRefreshWorker(args: {
   queueName: string;
   workerOptions: Omit<WorkerOptions, "connection"> & {
     connection: WorkerOptions["connection"];
   };
-  process: (job: RefreshMediaJob) => Promise<void>;
+  process: (job: MetadataQueueJob) => Promise<void>;
 }) {
-  return new Worker<RefreshMediaJob>(
+  return new Worker<MetadataQueueJob>(
     args.queueName,
     async (job) => {
-      if (job.name !== REFRESH_JOB_NAME) {
-        return;
+      switch (job.name) {
+        case REFRESH_JOB_NAME: {
+          const payload = refreshMediaJobSchema.parse(job.data);
+          await args.process(payload as MetadataQueueJob);
+          return;
+        }
+        case CLEANUP_JOB_NAME: {
+          const payload = cleanupExpiredCacheJobSchema.parse(job.data);
+          await args.process(payload as MetadataQueueJob);
+          return;
+        }
+        case WARMUP_JOB_NAME: {
+          const payload = warmHotRecordJobSchema.parse(job.data);
+          await args.process(payload as MetadataQueueJob);
+          return;
+        }
+        default:
+          return;
       }
-      const payload = refreshMediaJobSchema.parse(job.data);
-      await args.process(payload as RefreshMediaJob);
     },
     args.workerOptions,
   );

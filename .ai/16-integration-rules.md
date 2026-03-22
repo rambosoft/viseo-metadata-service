@@ -25,7 +25,8 @@
 
 - `Confirmed`: Tenant context comes from validated auth results, not request query or body fields.
 - `Confirmed`: Token cache TTL never exceeds upstream token expiry.
-- `Proposed`: Missing `tenantId` in auth response is treated as unauthorized for tenant-scoped routes.
+- `Confirmed`: Missing or empty `principalId`, `tenantId`, `scopes`, or `expiresAt` in auth responses is treated as invalid auth data.
+- `Confirmed`: Upstream `401` maps to authentication failure and upstream `403` maps to authorization failure.
 
 ## HTTP Integration
 
@@ -37,3 +38,4 @@
 
 - `Confirmed`: Job payloads are schema-validated on enqueue and execution.
 - `Confirmed`: Jobs are idempotent and safe to retry.
+- `Confirmed`: Refresh, cleanup, and warmup jobs share the same tenant-aware queue boundary.

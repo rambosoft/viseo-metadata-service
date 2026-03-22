@@ -20,3 +20,4 @@
 - `Confirmed`: Docker build is multi-stage and runs as non-root.
 - `Confirmed`: `.env.example` documents required settings.
 - `Confirmed`: `.ai/*` docs match implemented behavior and `.ai/initial/*` remains historical only.
+- `Confirmed`: Queue jobs are validated on enqueue and execution, and cache corruption triggers eviction plus safe fallback.
