@@ -1,6 +1,5 @@
 import { PrometheusMetrics } from "../adapters/observability/prometheus-metrics.js";
 import { createBullMqRefreshWorker } from "../adapters/refresh/create-bullmq-refresh-worker.js";
-import { TmdbMetadataProvider } from "../adapters/provider-tmdb/tmdb-metadata-provider.js";
 import { RedisKeyBuilder } from "../adapters/redis-store/redis-key-builder.js";
 import { RedisMediaSnapshotStore } from "../adapters/redis-store/redis-media-snapshot-store.js";
 import { CacheCleanupService } from "../application/refresh/cache-cleanup-service.js";
@@ -10,13 +9,18 @@ import type { MetadataQueueJob } from "../ports/refresh/refresh-queue-port.js";
 import type { AppConfig } from "../config/env.js";
 import { attachRedisLifecycleLogging } from "./attach-redis-lifecycle-logging.js";
 import { createBullMqConnection } from "./create-bullmq-connection.js";
+import { createMetadataProvider } from "./create-metadata-provider.js";
 import { createLogger } from "./logger.js";
 import { createRedisClient } from "./create-redis-client.js";
 import { SystemClock } from "./system-clock.js";
+import type { ImdbGraphqlClientPort } from "../adapters/provider-imdb/imdb-graphql-client.js";
 
 export function createWorkerRuntime(
   config: AppConfig,
   fetchImpl: typeof fetch = fetch,
+  overrides?: {
+    imdbGraphqlClient?: ImdbGraphqlClientPort;
+  },
 ) {
   const logger = createLogger(config.server.logLevel);
   const metrics = new PrometheusMetrics();
@@ -31,7 +35,7 @@ export function createWorkerRuntime(
     config.search.cacheTtlSeconds,
     config.search.indexTtlSeconds,
   );
-  const metadataProviderPort = new TmdbMetadataProvider(fetchImpl, config.tmdb, clock);
+  const metadataProviderPort = createMetadataProvider(config, fetchImpl, clock, overrides);
   const refreshService = new MediaRefreshService(
     snapshotStore,
     metadataProviderPort,

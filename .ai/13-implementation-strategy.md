@@ -19,7 +19,7 @@
 4. `Confirmed`: Redis snapshot and cache core
    - lookup keys, search snapshots, local index, single-flight, freshness rules
 5. `Confirmed`: Provider flows
-   - TMDB adapter, IMDb-compatible adapter, normalization, precedence rules
+   - TMDB adapter, official IMDb adapter, normalization, and rating-only precedence rules
 6. `Confirmed`: Public API
    - lookup and search endpoints, response envelopes, OpenAPI accuracy
 7. `Confirmed`: Background refresh

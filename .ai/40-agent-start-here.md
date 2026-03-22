@@ -24,9 +24,9 @@
 
 - `Confirmed`: Build the movie lookup path first.
 - `Confirmed`: Include config, auth boundary, Redis snapshot flow, TMDB adapter, route contract, and tests.
-- `Confirmed`: Movie lookup, TV lookup, search, stale lookup fallback, refresh worker flow, cleanup and warmup job support, metrics, readiness detail, Docker packaging, local auth fixtures, and Compose-based local runtime are now implemented.
-- `Confirmed`: The next implementation target is post-MVP provider expansion only after a commercially approved IMDb-compatible source is selected.
-- `Confirmed`: IMDb-compatible provider work is deferred until a commercially approved provider is selected.
+- `Confirmed`: Movie lookup, TV lookup, search, stale lookup fallback, refresh worker flow, cleanup and warmup job support, metrics, readiness detail, Docker packaging, local auth fixtures, Compose-based local runtime, official IMDb lookup enrichment/fallback, and `/docs` are now implemented.
+- `Confirmed`: The current provider baseline is TMDB-primary lookup/search with official IMDb lookup enrichment and fallback.
+- `Confirmed`: Search remains TMDB-only in MVP even though official IMDb lookup support is implemented.
 
 ## Non-Negotiable Rules
 

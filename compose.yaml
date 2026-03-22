@@ -48,6 +48,16 @@ services:
       REDIS_URL: redis://redis:6379
       AUTH_SERVICE_URL: http://auth-fixtures:${MANUAL_FIXTURE_AUTH_PORT:-4010}
       PORT: 3000
+      IMDB_API_URL: ${IMDB_API_URL}
+      IMDB_API_KEY: ${IMDB_API_KEY}
+      IMDB_AWS_REGION: ${IMDB_AWS_REGION:-us-east-1}
+      IMDB_DATA_SET_ID: ${IMDB_DATA_SET_ID}
+      IMDB_REVISION_ID: ${IMDB_REVISION_ID}
+      IMDB_ASSET_ID: ${IMDB_ASSET_ID}
+      AWS_PROFILE: ${AWS_PROFILE:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
     depends_on:
       redis:
         condition: service_healthy
@@ -74,6 +84,16 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       AUTH_SERVICE_URL: http://auth-fixtures:${MANUAL_FIXTURE_AUTH_PORT:-4010}
+      IMDB_API_URL: ${IMDB_API_URL}
+      IMDB_API_KEY: ${IMDB_API_KEY}
+      IMDB_AWS_REGION: ${IMDB_AWS_REGION:-us-east-1}
+      IMDB_DATA_SET_ID: ${IMDB_DATA_SET_ID}
+      IMDB_REVISION_ID: ${IMDB_REVISION_ID}
+      IMDB_ASSET_ID: ${IMDB_ASSET_ID}
+      AWS_PROFILE: ${AWS_PROFILE:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
     depends_on:
       redis:
         condition: service_healthy

@@ -161,7 +161,7 @@ export class MediaLookupService {
         language,
       });
       this.metrics.observe("provider_latency_ms", Date.now() - providerStartedAt, {
-        provider: "tmdb",
+        provider: providerResult?.provider ?? "composite",
         operation: "lookup",
         success: providerResult !== null,
       });
@@ -190,12 +190,12 @@ export class MediaLookupService {
       };
     } catch (error) {
       this.metrics.observe("provider_latency_ms", Date.now() - providerStartedAt, {
-        provider: "tmdb",
+        provider: "composite",
         operation: "lookup",
         success: false,
       });
       this.metrics.increment("metadata_provider_failure", {
-        provider: "tmdb",
+        provider: "composite",
         operation: "lookup",
       });
 

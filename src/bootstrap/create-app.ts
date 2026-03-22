@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import express from "express";
 import type { Logger } from "pino";
+import { getAbsoluteFSPath } from "swagger-ui-dist";
 
 import { AppError, AuthenticationError } from "../core/shared/errors.js";
 import type { MediaKind, MediaRecord } from "../core/media/types.js";
@@ -14,6 +15,7 @@ import type { MetricsPort } from "../ports/observability/metrics-port.js";
 import type { MediaSnapshotStorePort } from "../ports/storage/media-snapshot-store-port.js";
 import type { ReadinessReport } from "./create-readiness-check.js";
 import { createOpenApiDocument } from "./create-openapi-document.js";
+import { createSwaggerUiHtml } from "./create-swagger-ui-html.js";
 
 type RequestContext = {
   requestId?: string;
@@ -64,6 +66,14 @@ export function createApp(args: {
 
   app.get("/openapi.json", (_req, res) => {
     res.status(200).json(createOpenApiDocument());
+  });
+
+  app.use("/docs/assets", express.static(getAbsoluteFSPath()));
+  app.get("/docs", (_req, res) => {
+    res
+      .status(200)
+      .type("html")
+      .send(createSwaggerUiHtml("/openapi.json"));
   });
 
   app.get("/metrics", async (_req, res, next) => {

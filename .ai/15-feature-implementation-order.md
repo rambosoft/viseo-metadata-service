@@ -20,12 +20,12 @@
 8. `Confirmed`: TV-show provider flow and endpoint parity
 9. `Confirmed`: Search provider flow, cached search snapshots, local fetched-record index updates
 10. `Confirmed`: Search endpoint and paging contracts
-11. `Deferred`: IMDb-compatible adapter and identifier enrichment path pending commercially approved provider
+11. `Confirmed`: Official IMDb adapter, identifier enrichment path, TMDB-primary precedence, and IMDb fallback by `imdbId`
 12. `Confirmed`: Background refresh, cleanup, retry, and warmup jobs
 13. `Confirmed`: Metrics, readiness detail, stale fallback logic, performance tests
 14. `Confirmed`: Final documentation truth check, deployment polish, and performance closeout
 15. `Confirmed`: Real-environment Redis and BullMQ validation, local auth fixture harness, and Compose-based local runtime
-16. `Deferred`: IMDb-compatible adapter and identifier enrichment path pending commercially approved provider
+16. `Confirmed`: Complete OpenAPI 3.1 docs UI, official IMDb live validation workflow, and provider smoke scripts
 
 ## Sequencing Rules
 
@@ -34,8 +34,8 @@
 - `Confirmed`: Search, stale fallback, and refresh flow are now the implemented parity baseline.
 - `Confirmed`: Metrics, readiness detail, resilience, Docker packaging, and performance verification are now the implemented hardening baseline.
 - `Confirmed`: The current parity baseline includes queue-backed refresh, cleanup, and warmup support.
-- `Confirmed`: The current local-validation baseline includes Redis, BullMQ, API, worker, and auth fixture orchestration via Compose.
-- `Confirmed`: The next delivery slice is post-MVP provider expansion only after a commercially approved IMDb-compatible source is selected.
-- `Confirmed`: IMDb-compatible adapter work remains deferred until a commercially approved provider is selected.
+- `Confirmed`: The current local-validation baseline includes Redis, BullMQ, API, worker, auth fixture orchestration via Compose, and live provider smoke scripts.
+- `Confirmed`: The current provider baseline is TMDB-primary lookup and search plus official IMDb lookup enrichment and fallback.
+- `Confirmed`: Search remains TMDB-only even though official IMDb lookup support is implemented.
 - `Confirmed`: Do not build `channel` endpoints in MVP.
-- `Confirmed`: Do not add new providers before TMDB and the IMDb-compatible path are stable.
+- `Confirmed`: Do not add new providers before the TMDB plus official IMDb provider model is stable.

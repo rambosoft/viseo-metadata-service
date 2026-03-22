@@ -13,7 +13,8 @@
 - Metadata API is the canonical product.
 - Multi-tenant core is in MVP.
 - Redis-first storage is canonical for MVP.
-- TMDB is the only active provider in the implemented MVP runtime.
+- TMDB is the primary provider for lookup normalization and the only active search provider in MVP.
+- Official IMDb API is approved and implemented as an optional capability for lookup enrichment and `imdbId` fallback.
 - Hybrid search is in MVP.
 - Local index contains fetched records and cached search results only.
 
@@ -21,10 +22,11 @@
 
 - The service is read-heavy and benefits from background refresh over synchronous refetching.
 - Provider contracts will evolve, so adapter isolation must remain strict.
+- Official IMDb access requires AWS-authenticated requests plus the subscribed dataset identifiers.
 
 ## Proposed Defaults
 
 - Auth adapter returns `principalId`, `tenantId`, `scopes`, and `expiresAt`.
 - TMDB acts as the primary source for movies and TV shows.
-- IMDb-compatible provider remains deferred behind the provider boundary until a commercially approved source is selected.
+- Official IMDb overrides `rating` only when configured and does not participate in provider search for MVP.
 - `channel` stays reserved but unimplemented in MVP.

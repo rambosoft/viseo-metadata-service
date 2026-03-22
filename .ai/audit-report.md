@@ -29,7 +29,7 @@
 ## What Is Missing In Source
 
 - `Needs clarification`: Final approved auth-service contract.
-- `Needs clarification`: Exact approved IMDb-compatible provider choice.
+- `Confirmed`: Official IMDb API is now the approved and implemented IMDb provider path.
 - `Confirmed`: No canonical `.ai/*` package existed before this redesign.
 - `Confirmed`: No active implementation files existed to make the source self-validating.
 
@@ -64,5 +64,5 @@
 ## Can Be Deferred Safely
 
 - `Needs clarification`: Exact auth response shape.
-- `Needs clarification`: Exact IMDb-compatible provider vendor and licensing model.
+- `Needs clarification`: Future field-merge scope for IMDb beyond the current rating-only override.
 - `Needs clarification`: Retention period for old provider snapshots and warmup heuristics.

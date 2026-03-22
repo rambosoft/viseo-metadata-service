@@ -16,6 +16,13 @@ const envSchema = z.object({
   TMDB_IMAGE_BASE_URL: z.string().url().default("https://image.tmdb.org/t/p/w500"),
   TMDB_API_KEY: z.string().min(1),
   TMDB_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  IMDB_API_URL: z.string().url().optional(),
+  IMDB_API_KEY: z.string().min(1).optional(),
+  IMDB_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
+  IMDB_AWS_REGION: z.string().min(1).optional(),
+  IMDB_DATA_SET_ID: z.string().min(1).optional(),
+  IMDB_REVISION_ID: z.string().min(1).optional(),
+  IMDB_ASSET_ID: z.string().min(1).optional(),
   MOVIE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   TV_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   MEDIA_STALE_SERVE_WINDOW_SECONDS: z.coerce.number().int().positive().default(86400),
@@ -62,6 +69,15 @@ export type AppConfig = Readonly<{
     staleServeWindowSeconds: number;
     canonicalRecordTtlSeconds: number;
   };
+  imdb: null | {
+    apiUrl: string;
+    apiKey: string;
+    timeoutMs: number;
+    awsRegion: string;
+    dataSetId: string;
+    revisionId: string;
+    assetId: string;
+  };
   coordination: {
     lookupTtlSeconds: number;
     lookupWaitMs: number;
@@ -82,6 +98,15 @@ export type AppConfig = Readonly<{
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = envSchema.parse(env);
+  const imdbConfigured = [
+    parsed.IMDB_API_URL,
+    parsed.IMDB_API_KEY,
+    parsed.IMDB_TIMEOUT_MS,
+    parsed.IMDB_AWS_REGION,
+    parsed.IMDB_DATA_SET_ID,
+    parsed.IMDB_REVISION_ID,
+    parsed.IMDB_ASSET_ID,
+  ].some((value) => value !== undefined);
   const maxHotTtlSeconds = Math.max(
     parsed.MOVIE_CACHE_TTL_SECONDS,
     parsed.TV_CACHE_TTL_SECONDS,
@@ -93,6 +118,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   ) {
     throw new Error(
       "CANONICAL_RECORD_TTL_SECONDS must be at least MOVIE/TV cache TTL plus MEDIA_STALE_SERVE_WINDOW_SECONDS",
+    );
+  }
+
+  if (
+    imdbConfigured &&
+    (
+      parsed.IMDB_API_KEY === undefined ||
+      parsed.IMDB_DATA_SET_ID === undefined ||
+      parsed.IMDB_REVISION_ID === undefined ||
+      parsed.IMDB_ASSET_ID === undefined
+    )
+  ) {
+    throw new Error(
+      "IMDb support requires IMDB_API_KEY, IMDB_DATA_SET_ID, IMDB_REVISION_ID, and IMDB_ASSET_ID when any IMDb setting is provided",
     );
   }
 
@@ -126,6 +165,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       staleServeWindowSeconds: parsed.MEDIA_STALE_SERVE_WINDOW_SECONDS,
       canonicalRecordTtlSeconds: parsed.CANONICAL_RECORD_TTL_SECONDS,
     },
+    imdb:
+      imdbConfigured
+        ? {
+            apiUrl:
+              parsed.IMDB_API_URL ??
+              "https://api-fulfill.dataexchange.us-east-1.amazonaws.com/v1",
+            apiKey: parsed.IMDB_API_KEY as string,
+            timeoutMs: parsed.IMDB_TIMEOUT_MS ?? 5000,
+            awsRegion: parsed.IMDB_AWS_REGION ?? "us-east-1",
+            dataSetId: parsed.IMDB_DATA_SET_ID as string,
+            revisionId: parsed.IMDB_REVISION_ID as string,
+            assetId: parsed.IMDB_ASSET_ID as string,
+          }
+        : null,
     coordination: {
       lookupTtlSeconds: parsed.LOOKUP_SINGLEFLIGHT_TTL_SECONDS,
       lookupWaitMs: parsed.LOOKUP_SINGLEFLIGHT_WAIT_MS,

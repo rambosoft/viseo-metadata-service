@@ -24,6 +24,8 @@
 | API docs | OpenAPI 3.1 | Confirmed |
 | Containers | Docker multi-stage image | Confirmed |
 | Local orchestration | Docker Compose for Redis, auth fixture, API, and worker | Confirmed |
+| Primary metadata provider | TMDB | Confirmed |
+| Secondary metadata provider | Official IMDb API via AWS Data Exchange | Confirmed |
 
 ## Rejected For MVP
 
@@ -31,7 +33,7 @@
 - `Confirmed`: Axios is not the default HTTP client.
 - `Confirmed`: Winston is not the canonical logger.
 - `Confirmed`: BullMQ 3-era guidance is stale and not authoritative.
-- `Confirmed`: TMDB remains external even in local Compose workflows; provider emulation is not part of the canonical local stack.
+- `Confirmed`: TMDB and official IMDb remain external even in local Compose workflows; provider emulation is not part of the canonical local stack.
 
 ## Selection Rules
 

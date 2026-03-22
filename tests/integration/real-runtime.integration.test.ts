@@ -13,6 +13,7 @@ import { createWorkerRuntime } from "../../src/bootstrap/create-worker-runtime.j
 import type { MediaRecord } from "../../src/core/media/types.js";
 import type { AppConfig } from "../../src/config/env.js";
 import type { ClockPort } from "../../src/ports/shared/clock-port.js";
+import type { ImdbGraphqlClientPort } from "../../src/adapters/provider-imdb/imdb-graphql-client.js";
 
 const redisUrl = process.env.REDIS_URL;
 const fixedClock: ClockPort = {
@@ -50,6 +51,15 @@ function buildConfig(prefix: string, queueName: string): AppConfig {
       staleServeWindowSeconds: 86400,
       canonicalRecordTtlSeconds: 604800,
     },
+    imdb: {
+      apiUrl: "https://api-fulfill.dataexchange.us-east-1.amazonaws.com/v1",
+      apiKey: "test-imdb-token",
+      timeoutMs: 1000,
+      awsRegion: "us-east-1",
+      dataSetId: "dataset",
+      revisionId: "revision",
+      assetId: "asset",
+    },
     coordination: {
       lookupTtlSeconds: 5,
       lookupWaitMs: 500,
@@ -68,6 +78,25 @@ function buildConfig(prefix: string, queueName: string): AppConfig {
     },
   };
 }
+
+const fakeImdbGraphqlClient: ImdbGraphqlClientPort = {
+  async execute<T>() {
+    return {
+      title: {
+        id: "tt0137523",
+        titleText: { text: "Fight Club" },
+        originalTitleText: { text: "Fight Club" },
+        titleType: { text: "movie", canHaveEpisodes: false },
+        ratingsSummary: { aggregateRating: 8.8, voteCount: 1000 },
+        releaseDate: { year: 1999, month: 10, day: 15 },
+        runtime: { seconds: 8340 },
+        titleGenres: { genres: [{ genre: { text: "Drama" } }] },
+        plots: { edges: [{ node: { plotText: { plainText: "IMDb plot" } } }] },
+        credits: { edges: [] },
+      },
+    } as T;
+  },
+};
 
 function buildMovieRecord(prefix: string): MediaRecord {
   return {
@@ -190,7 +219,11 @@ describe.skipIf(redisUrl === undefined || redisUrl.length === 0)(
         21600,
       );
       refreshQueue = new BullMqRefreshQueue(queue as never);
-      workerRuntime = createWorkerRuntime(config, createProviderFetchStub() as typeof fetch);
+      workerRuntime = createWorkerRuntime(
+        config,
+        createProviderFetchStub() as typeof fetch,
+        { imdbGraphqlClient: fakeImdbGraphqlClient },
+      );
 
       await redis.ping();
       await queueEvents.waitUntilReady();
@@ -268,7 +301,9 @@ describe.skipIf(redisUrl === undefined || redisUrl.length === 0)(
     });
 
     it("reports ready health against live Redis and BullMQ connections", async () => {
-      const runtime = createRuntime(config, createProviderFetchStub() as typeof fetch);
+      const runtime = createRuntime(config, createProviderFetchStub() as typeof fetch, {
+        imdbGraphqlClient: fakeImdbGraphqlClient,
+      });
 
       try {
         const response = await request(runtime.app).get("/health/ready").expect(200);

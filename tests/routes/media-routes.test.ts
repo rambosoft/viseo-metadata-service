@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { HttpAuthValidationAdapter } from "../../src/adapters/auth-http/http-auth-validation-adapter.js";
 import { RedisLookupCoordinator } from "../../src/adapters/coordination/redis-lookup-coordinator.js";
 import { PrometheusMetrics } from "../../src/adapters/observability/prometheus-metrics.js";
-import { TmdbMetadataProvider } from "../../src/adapters/provider-tmdb/tmdb-metadata-provider.js";
 import { AllowAllRateLimiter } from "../../src/adapters/rate-limit/allow-all-rate-limiter.js";
 import { RedisRateLimiter } from "../../src/adapters/rate-limit/redis-rate-limiter.js";
 import { NoopRefreshQueue } from "../../src/adapters/refresh/noop-refresh-queue.js";
@@ -14,9 +13,11 @@ import { RedisMediaSnapshotStore } from "../../src/adapters/redis-store/redis-me
 import { MediaLookupService } from "../../src/application/lookup/media-lookup-service.js";
 import { MediaSearchService } from "../../src/application/search/media-search-service.js";
 import { createApp } from "../../src/bootstrap/create-app.js";
+import { createMetadataProvider } from "../../src/bootstrap/create-metadata-provider.js";
 import { createReadinessCheck } from "../../src/bootstrap/create-readiness-check.js";
 import { createLogger } from "../../src/bootstrap/logger.js";
 import type { MediaRecord } from "../../src/core/media/types.js";
+import type { ImdbGraphqlClientPort } from "../../src/adapters/provider-imdb/imdb-graphql-client.js";
 import type { RefreshQueuePort } from "../../src/ports/refresh/refresh-queue-port.js";
 import type { ClockPort } from "../../src/ports/shared/clock-port.js";
 
@@ -24,10 +25,66 @@ const fixedClock: ClockPort = {
   now: () => new Date("2026-01-01T00:00:00.000Z")
 };
 const testRedisClients: Array<InstanceType<typeof Redis>> = [];
+type ImdbGraphqlExecuteArgs = Parameters<ImdbGraphqlClientPort["execute"]>[0];
+
+const fakeImdbGraphqlClient: ImdbGraphqlClientPort = {
+  async execute<T>(args: ImdbGraphqlExecuteArgs) {
+    const imdbId = typeof args.variables?.id === "string" ? args.variables.id : "";
+    if (imdbId === "tt0903747") {
+      return {
+        title: {
+          id: imdbId,
+          titleText: { text: "Breaking Bad" },
+          originalTitleText: { text: "Breaking Bad" },
+          titleType: { text: "tvSeries", canHaveEpisodes: true },
+          ratingsSummary: { aggregateRating: 9.5, voteCount: 1200 },
+          releaseDate: { year: 2008, month: 1, day: 20 },
+          runtime: { seconds: 0 },
+          titleGenres: { genres: [{ genre: { text: "Drama" } }] },
+          plots: { edges: [{ node: { plotText: { plainText: "IMDb TV plot" } } }] },
+          credits: { edges: [] },
+        },
+      } as T;
+    }
+
+    if (imdbId === "tt7654321") {
+      return {
+        title: {
+          id: imdbId,
+          titleText: { text: "Fallback Movie" },
+          originalTitleText: { text: "Fallback Movie" },
+          titleType: { text: "movie", canHaveEpisodes: false },
+          ratingsSummary: { aggregateRating: 7.7, voteCount: 400 },
+          releaseDate: { year: 2001, month: 9, day: 9 },
+          runtime: { seconds: 6000 },
+          titleGenres: { genres: [{ genre: { text: "Thriller" } }] },
+          plots: { edges: [{ node: { plotText: { plainText: "IMDb-only movie." } } }] },
+          credits: { edges: [] },
+        },
+      } as T;
+    }
+
+    return {
+      title: {
+        id: "tt0137523",
+        titleText: { text: "Fight Club" },
+        originalTitleText: { text: "Fight Club" },
+        titleType: { text: "movie", canHaveEpisodes: false },
+        ratingsSummary: { aggregateRating: 8.8, voteCount: 1500 },
+        releaseDate: { year: 1999, month: 10, day: 15 },
+        runtime: { seconds: 8340 },
+        titleGenres: { genres: [{ genre: { text: "Drama" } }] },
+        plots: { edges: [{ node: { plotText: { plainText: "IMDb movie plot" } } }] },
+        credits: { edges: [] },
+      },
+    } as T;
+  },
+};
 
 function createTestApp(
   fetchImpl: typeof fetch,
   options?: {
+    imdbEnabled?: boolean;
     rateLimitMaxRequests?: number;
     refreshQueue?: RefreshQueuePort;
     readinessCheck?: ReturnType<typeof createReadinessCheck>;
@@ -56,19 +113,69 @@ function createTestApp(
     },
     metrics,
   );
-  const provider = new TmdbMetadataProvider(
-    fetchImpl,
+  const provider = createMetadataProvider(
     {
-      baseUrl: "https://api.themoviedb.org/3",
-      imageBaseUrl: "https://image.tmdb.org/t/p/w500",
-      apiKey: "secret",
-      timeoutMs: 1000,
-      movieTtlSeconds: 3600,
-      tvTtlSeconds: 3600,
-      staleServeWindowSeconds: 86400,
-      canonicalRecordTtlSeconds: 604800,
+      server: {
+        nodeEnv: "test",
+        port: 3000,
+        requestBodyLimitBytes: 16384,
+        logLevel: "info",
+      },
+      redis: {
+        url: "redis://localhost:6379",
+        keyPrefix: `md_rt_${Math.random().toString(16).slice(2)}`,
+      },
+      rateLimit: {
+        windowSeconds: 60,
+        maxRequests: options?.rateLimitMaxRequests ?? 120,
+      },
+      auth: {
+        serviceUrl: "https://auth.example.com",
+        timeoutMs: 1000,
+        cacheTtlSeconds: 3600,
+      },
+      tmdb: {
+        baseUrl: "https://api.themoviedb.org/3",
+        imageBaseUrl: "https://image.tmdb.org/t/p/w500",
+        apiKey: "secret",
+        timeoutMs: 1000,
+        movieTtlSeconds: 3600,
+        tvTtlSeconds: 3600,
+        staleServeWindowSeconds: 86400,
+        canonicalRecordTtlSeconds: 604800,
+      },
+      imdb:
+        options?.imdbEnabled === false
+          ? null
+          : {
+              apiUrl: "https://api-fulfill.dataexchange.us-east-1.amazonaws.com/v1",
+              apiKey: "secret",
+              timeoutMs: 1000,
+              awsRegion: "us-east-1",
+              dataSetId: "dataset",
+              revisionId: "revision",
+              assetId: "asset",
+            },
+      coordination: {
+        lookupTtlSeconds: 5,
+        lookupWaitMs: 500,
+      },
+      search: {
+        cacheTtlSeconds: 900,
+        indexTtlSeconds: 21600,
+      },
+      refresh: {
+        queueName: "metadata-refresh-test",
+        jobAttempts: 3,
+        jobBackoffMs: 1000,
+        workerConcurrency: 1,
+        dedupTtlSeconds: 60,
+        workerShutdownTimeoutMs: 30000,
+      },
     },
-    fixedClock
+    fetchImpl,
+    fixedClock,
+    options?.imdbEnabled === false ? undefined : { imdbGraphqlClient: fakeImdbGraphqlClient },
   );
   const rateLimiter =
     options?.rateLimitMaxRequests !== undefined
@@ -208,6 +315,15 @@ function createFetchStub() {
       );
     }
 
+    if (url.includes("/tv/1396/external_ids")) {
+      return new Response(
+        JSON.stringify({
+          imdb_id: "tt0903747",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
     if (url.includes("/tv/1396")) {
       return new Response(
         JSON.stringify({
@@ -229,6 +345,16 @@ function createFetchStub() {
     }
 
     if (url.includes("/find/")) {
+      if (url.includes("tt7654321")) {
+        return new Response(
+          JSON.stringify({
+            movie_results: [],
+            tv_results: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
       return new Response(
         JSON.stringify({
           movie_results: [{ id: 550 }],
@@ -336,6 +462,22 @@ describe("media routes", () => {
 
     expect(response.body.data.title).toBe("Fight Club");
     expect(response.body.meta.source).toBe("provider");
+    expect(response.body.data.rating).toBe(8.8);
+  });
+
+  it("boots in TMDB-only mode when IMDb config is absent", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch, {
+      imdbEnabled: false,
+    });
+
+    const response = await request(app)
+      .get("/api/v1/media/movie?tmdbId=550")
+      .set("Authorization", "Bearer token")
+      .expect(200);
+
+    expect(response.body.data.title).toBe("Fight Club");
+    expect(response.body.data.rating).toBe(8.4);
   });
 
   it("returns a TV show for tmdbId", async () => {
@@ -350,6 +492,7 @@ describe("media routes", () => {
     expect(response.body.data.title).toBe("Breaking Bad");
     expect(response.body.data.firstAirYear).toBe(2008);
     expect(response.body.meta.tenantId).toBe("tenant_1");
+    expect(response.body.data.rating).toBe(9.5);
   });
 
   it("returns validation failure for multiple identifiers", async () => {
@@ -377,6 +520,18 @@ describe("media routes", () => {
     expect(response.body.paths["/api/v1/media/tv"]).toBeDefined();
     expect(response.body.paths["/api/v1/media/search"]).toBeDefined();
     expect(response.body.paths["/metrics"]).toBeDefined();
+    expect(response.body.paths["/docs"]).toBeDefined();
+  });
+
+  it("serves interactive docs", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    const response = await request(app).get("/docs").expect(200);
+
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.text).toContain("SwaggerUIBundle");
+    expect(response.text).toContain("/openapi.json");
   });
 
   it("returns Prometheus metrics", async () => {
@@ -454,7 +609,7 @@ describe("media routes", () => {
       .expect(200);
 
     expect(second.body.meta.source).toBe("cache");
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it("serves stale movie data and enqueues refresh when a servable canonical record exists", async () => {
@@ -554,6 +709,34 @@ describe("media routes", () => {
 
     expect(response.body.meta.source).toBe("provider");
     expect(response.body.data.items).toHaveLength(2);
+  });
+
+  it("falls back to an IMDb-backed movie record when TMDB cannot resolve an imdbId", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch);
+
+    const response = await request(app)
+      .get("/api/v1/media/movie?imdbId=tt7654321")
+      .set("Authorization", "Bearer token")
+      .expect(200);
+
+    expect(response.body.data.title).toBe("Fallback Movie");
+    expect(response.body.data.rating).toBe(7.7);
+    expect(response.body.data.identifiers.imdbId).toBe("tt7654321");
+  });
+
+  it("returns 404 for unresolved imdbId lookups when IMDb is disabled", async () => {
+    const fetchImpl = createFetchStub();
+    const { app } = createTestApp(fetchImpl as typeof fetch, {
+      imdbEnabled: false,
+    });
+
+    const response = await request(app)
+      .get("/api/v1/media/movie?imdbId=tt7654321")
+      .set("Authorization", "Bearer token")
+      .expect(404);
+
+    expect(response.body.error.code).toBe("not_found");
   });
 
   it("returns cached search results on repeat query", async () => {

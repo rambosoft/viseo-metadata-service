@@ -61,7 +61,7 @@ export class MediaRefreshService {
         language: job.language,
       });
       this.metrics.observe("provider_latency_ms", Date.now() - startedAt, {
-        provider: "tmdb",
+        provider: providerResult?.provider ?? "composite",
         operation: "refresh_lookup",
         success: providerResult !== null,
       });
@@ -109,12 +109,12 @@ export class MediaRefreshService {
       };
     } catch (error) {
       this.metrics.observe("provider_latency_ms", Date.now() - startedAt, {
-        provider: "tmdb",
+        provider: "composite",
         operation: "refresh_lookup",
         success: false,
       });
       this.metrics.increment("metadata_provider_failure", {
-        provider: "tmdb",
+        provider: "composite",
         operation: "refresh_lookup",
       });
       this.metrics.increment("metadata_refresh_failed", {

@@ -35,6 +35,10 @@ export const tmdbTvDetailsSchema = z.object({
   backdrop_path: z.string().nullable().optional()
 });
 
+export const tmdbTvExternalIdsSchema = z.object({
+  imdb_id: z.string().nullable().optional(),
+});
+
 export const tmdbFindResponseSchema = z.object({
   movie_results: z.array(tmdbFindMatchSchema).default([]),
   tv_results: z.array(tmdbFindMatchSchema).default([])

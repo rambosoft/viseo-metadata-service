@@ -1,6 +1,6 @@
 import {
-  buildContentHash,
   buildMediaId,
+  buildRecordContentHash,
   computeFreshness,
 } from "../../application/lookup/media-lookup-helpers.js";
 import { ProviderUnavailableError } from "../../core/shared/errors.js";
@@ -26,6 +26,7 @@ import {
   tmdbTvSearchItemSchema,
   tmdbTvSearchResponseSchema,
   tmdbTvDetailsSchema,
+  tmdbTvExternalIdsSchema,
 } from "./tmdb-schemas.js";
 
 type FetchLike = typeof fetch;
@@ -84,8 +85,9 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
       provider: "tmdb",
       record: this.toTvRecord(
         args.tenantId,
-        payload,
-        args.identifier.type === "imdbId" ? args.identifier.value : undefined
+        payload.details,
+        payload.imdbId ??
+          (args.identifier.type === "imdbId" ? args.identifier.value : undefined)
       )
     };
   }
@@ -138,7 +140,24 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
   }
 
   private async lookupTvByTmdbId(id: string, language: string) {
-    return this.fetchTmdbTv(`/tv/${encodeURIComponent(id)}?language=${encodeURIComponent(language)}`);
+    const [details, externalIds] = await Promise.all([
+      this.fetchTmdbTv(`/tv/${encodeURIComponent(id)}?language=${encodeURIComponent(language)}`),
+      this.fetchTmdbExternalIds(`/tv/${encodeURIComponent(id)}/external_ids`),
+    ]);
+
+    if (details === null) {
+      return null;
+    }
+
+    return {
+      details,
+      imdbId:
+        externalIds !== null &&
+        externalIds.imdb_id !== null &&
+        externalIds.imdb_id !== undefined
+          ? externalIds.imdb_id
+          : undefined,
+    };
   }
 
   private async lookupTvByImdbId(id: string, language: string) {
@@ -149,7 +168,14 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
     if (show === undefined) {
       return null;
     }
-    return this.fetchTmdbTv(`/tv/${show.id}?language=${encodeURIComponent(language)}`);
+    const details = await this.fetchTmdbTv(`/tv/${show.id}?language=${encodeURIComponent(language)}`);
+    if (details === null) {
+      return null;
+    }
+    return {
+      details,
+      imdbId: id,
+    };
   }
 
   private toMovieRecord(tenantId: string, payload: typeof tmdbMovieDetailsSchema._type): MovieMediaRecord {
@@ -158,18 +184,10 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
       type: "tmdbId",
       value: String(payload.id)
     });
-    const contentHash = buildContentHash({
-      title: payload.title,
-      releaseDate: payload.release_date,
-      runtime: payload.runtime,
-      rating: payload.vote_average,
-      genres: payload.genres.map((genre) => genre.name)
-    });
-
-    return {
+    const record = {
       mediaId,
       tenantId: tenantId as MediaRecord["tenantId"],
-      kind: "movie",
+      kind: "movie" as const,
       canonicalTitle: payload.title,
       ...(payload.original_title !== undefined ? { originalTitle: payload.original_title } : {}),
       ...(payload.overview !== undefined ? { description: payload.overview } : {}),
@@ -194,14 +212,40 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
       },
       providerRefs: [
         {
-          provider: "tmdb",
+          provider: "tmdb" as const,
           providerRecordId: String(payload.id),
           normalizedAt: now,
-          hash: contentHash,
+          hash: buildRecordContentHash({
+            kind: "movie",
+            canonicalTitle: payload.title,
+            ...(payload.original_title !== undefined
+              ? { originalTitle: payload.original_title }
+              : {}),
+            ...(payload.overview !== undefined ? { description: payload.overview } : {}),
+            genres: payload.genres.map((genre) => genre.name),
+            ...(payload.vote_average !== undefined ? { rating: payload.vote_average } : {}),
+            cast: [],
+            images: {
+              ...(payload.poster_path
+                ? { posterUrl: `${this.tmdbConfig.imageBaseUrl}${payload.poster_path}` }
+                : {}),
+              ...(payload.backdrop_path
+                ? { backdropUrl: `${this.tmdbConfig.imageBaseUrl}${payload.backdrop_path}` }
+                : {}),
+            },
+            ...(payload.release_date !== undefined ? { releaseDate: payload.release_date } : {}),
+            ...(
+              payload.release_date !== undefined && payload.release_date.length >= 4
+                ? { releaseYear: Number(payload.release_date.slice(0, 4)) }
+                : {}
+            ),
+            ...(payload.runtime !== null && payload.runtime !== undefined
+              ? { runtimeMinutes: payload.runtime }
+              : {}),
+          }),
           payload
         }
       ],
-      contentHash,
       freshness: computeFreshness(
         this.clockPort,
         this.tmdbConfig.movieTtlSeconds,
@@ -210,6 +254,11 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
       schemaVersion: 1,
       createdAt: now,
       updatedAt: now
+    } satisfies Omit<MovieMediaRecord, "contentHash">;
+
+    return {
+      ...record,
+      contentHash: buildRecordContentHash(record),
     };
   }
 
@@ -223,19 +272,10 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
       type: "tmdbId",
       value: String(payload.id)
     });
-    const contentHash = buildContentHash({
-      title: payload.name,
-      firstAirDate: payload.first_air_date,
-      seasonCount: payload.number_of_seasons,
-      episodeCount: payload.number_of_episodes,
-      rating: payload.vote_average,
-      genres: payload.genres.map((genre) => genre.name)
-    });
-
-    return {
+    const record = {
       mediaId,
       tenantId: tenantId as MediaRecord["tenantId"],
-      kind: "tv",
+      kind: "tv" as const,
       canonicalTitle: payload.name,
       ...(payload.original_name !== undefined ? { originalTitle: payload.original_name } : {}),
       ...(payload.overview !== undefined ? { description: payload.overview } : {}),
@@ -262,14 +302,46 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
       },
       providerRefs: [
         {
-          provider: "tmdb",
+          provider: "tmdb" as const,
           providerRecordId: String(payload.id),
           normalizedAt: now,
-          hash: contentHash,
+          hash: buildRecordContentHash({
+            kind: "tv",
+            canonicalTitle: payload.name,
+            ...(payload.original_name !== undefined
+              ? { originalTitle: payload.original_name }
+              : {}),
+            ...(payload.overview !== undefined ? { description: payload.overview } : {}),
+            genres: payload.genres.map((genre) => genre.name),
+            ...(payload.vote_average !== undefined ? { rating: payload.vote_average } : {}),
+            cast: [],
+            images: {
+              ...(payload.poster_path
+                ? { posterUrl: `${this.tmdbConfig.imageBaseUrl}${payload.poster_path}` }
+                : {}),
+              ...(payload.backdrop_path
+                ? { backdropUrl: `${this.tmdbConfig.imageBaseUrl}${payload.backdrop_path}` }
+                : {}),
+            },
+            ...(payload.first_air_date !== undefined
+              ? { firstAirDate: payload.first_air_date }
+              : {}),
+            ...(
+              payload.first_air_date !== undefined && payload.first_air_date.length >= 4
+                ? { firstAirYear: Number(payload.first_air_date.slice(0, 4)) }
+                : {}
+            ),
+            ...(payload.number_of_seasons !== undefined
+              ? { seasonCount: payload.number_of_seasons }
+              : {}),
+            ...(payload.number_of_episodes !== undefined
+              ? { episodeCount: payload.number_of_episodes }
+              : {}),
+            ...(payload.status !== undefined ? { status: payload.status } : {}),
+          }),
           payload
         }
       ],
-      contentHash,
       freshness: computeFreshness(
         this.clockPort,
         this.tmdbConfig.tvTtlSeconds,
@@ -278,6 +350,11 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
       schemaVersion: 1,
       createdAt: now,
       updatedAt: now
+    } satisfies Omit<TvMediaRecord, "contentHash">;
+
+    return {
+      ...record,
+      contentHash: buildRecordContentHash(record),
     };
   }
 
@@ -435,6 +512,32 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
         throw new ProviderUnavailableError("TMDB unavailable");
       }
       return tmdbTvDetailsSchema.parse(await response.json());
+    } catch (error) {
+      if (error instanceof ProviderUnavailableError) {
+        throw error;
+      }
+      throw new ProviderUnavailableError("TMDB unavailable");
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async fetchTmdbExternalIds(path: string) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.tmdbConfig.timeoutMs);
+
+    try {
+      const response = await this.fetchImpl(
+        `${this.tmdbConfig.baseUrl}${path}${path.includes("?") ? "&" : "?"}api_key=${this.tmdbConfig.apiKey}`,
+        { signal: controller.signal }
+      );
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new ProviderUnavailableError("TMDB unavailable");
+      }
+      return tmdbTvExternalIdsSchema.parse(await response.json());
     } catch (error) {
       if (error instanceof ProviderUnavailableError) {
         throw error;

@@ -12,11 +12,11 @@
 
 - `Confirmed`: Viseo Metadata Service is a multi-tenant media metadata API.
 - `Confirmed`: The service resolves, normalizes, caches, and serves metadata for movies and TV shows.
-- `Confirmed`: TMDB is the only active metadata provider in the implemented MVP runtime.
-- `Deferred`: IMDb-compatible provider work remains planned behind a provider boundary, but is not currently implemented.
+- `Confirmed`: TMDB is the primary metadata provider for lookup normalization and the only active search provider in MVP.
+- `Confirmed`: Official IMDb API is implemented as an optional capability for lookup enrichment and fallback by `imdbId`.
 - `Confirmed`: Redis is the MVP operational store for canonical snapshots, cached search results, lookup caches, and local fetched-record index state.
 - `Confirmed`: Authentication is external, but tenant context and auth caching are part of this service.
-- `Confirmed`: Local MVP operation can run with Compose plus a service-owned auth fixture, while TMDB stays real.
+- `Confirmed`: Local MVP operation can run with Compose plus a service-owned auth fixture, while TMDB and IMDb stay real.
 
 ## Stable Terminology
 
@@ -25,6 +25,7 @@
 - `Confirmed`: `provider snapshot` means the validated provider-specific data retained for refresh comparison and traceability.
 - `Confirmed`: `lookup cache` means the Redis entry for an identifier-based media response.
 - `Confirmed`: `local index` means Redis-backed search acceleration over records the system has already fetched.
+- `Confirmed`: `IMDb enrichment` means official IMDb lookup data may override the public `rating` field only.
 
 ## Scope Headline
 

@@ -20,7 +20,7 @@
 - `Confirmed`: `GET /health/ready`
 - `Confirmed`: `GET /metrics`
 - `Confirmed`: `GET /openapi.json`
-- `Proposed`: `GET /docs`
+- `Confirmed`: `GET /docs`
 
 ## Lookup Rules
 
@@ -31,6 +31,8 @@
 - `Confirmed`: `lang` defaults to `en`.
 - `Confirmed`: Lookup is tenant-scoped even when identifiers look globally unique.
 - `Confirmed`: `channel` lookup endpoint is not part of MVP.
+- `Confirmed`: TMDB is the primary lookup source.
+- `Confirmed`: Official IMDb is used for `imdbId` fallback and `rating` enrichment only when IMDb is configured.
 
 ## Search Rules
 
@@ -38,6 +40,7 @@
 - `Confirmed`: Omitted `kind` searches across movie and TV only.
 - `Confirmed`: Search first checks cached query snapshots.
 - `Confirmed`: Local index may accelerate results only for previously fetched records.
+- `Confirmed`: Search remains TMDB-backed; IMDb does not participate in provider search for MVP.
 
 ## Response Envelope
 

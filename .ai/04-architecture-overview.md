@@ -23,7 +23,7 @@
 5. Adapters:
    - auth service
    - TMDB
-   - IMDb-compatible provider boundary reserved for a later approved binding
+   - official IMDb provider
    - Redis
    - BullMQ
    - observability
@@ -34,6 +34,7 @@
 - `Confirmed`: All external payloads are validated before entering domain logic.
 - `Confirmed`: Every cache key, lock key, and job payload is tenant-aware.
 - `Confirmed`: Canonical responses are built from internal normalized models only.
+- `Confirmed`: TMDB remains authoritative for most public fields; official IMDb overrides `rating` only when enrichment is available.
 
 ## Request Flow
 

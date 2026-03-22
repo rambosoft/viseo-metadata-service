@@ -6,7 +6,8 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 - Prometheus metrics endpoint and request/provider/cache instrumentation
 - Redis-backed auth validation cache
 - Redis-backed canonical movie/TV snapshots, hot lookup pointers, search snapshots, and local fetched-record index
-- TMDB movie, TV, and mixed search flows
+- TMDB-primary movie, TV, and mixed search flows
+- official IMDb API lookup enrichment and fallback for `imdbId` requests
 - BullMQ-backed stale refresh flow and worker runtime
 - BullMQ-backed stale refresh, derived-cache cleanup, and hot-record warmup job flows
 - stale-but-servable lookup fallback for movie and TV records
@@ -20,6 +21,16 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 - `GET /health/live`
 - `GET /health/ready`
 - `GET /metrics`
+- `GET /openapi.json`
+- `GET /docs`
+
+## Provider Model
+
+- TMDB is the primary provider for lookup normalization and the only active search provider.
+- Official IMDb API is optional and is used for lookup enrichment and fallback only when configured.
+- TMDB remains authoritative for titles, descriptions, dates, runtime, images, genres, counts, and status.
+- IMDb overrides `rating` only when enrichment data is available.
+- If a lookup by `imdbId` cannot be resolved through TMDB, the service may return an IMDb-backed canonical fallback record.
 
 ## Stack
 
@@ -30,6 +41,7 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 - BullMQ
 - Zod validation
 - Pino logging
+- official IMDb API via AWS Data Exchange
 - SWC build
 - Vitest and Supertest
 
@@ -41,6 +53,11 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
    - `AUTH_SERVICE_URL`
    - `TMDB_API_KEY`
    - or copy `.env.example` and adjust values
+   - if you want IMDb fallback and `rating` enrichment, also set:
+     - `IMDB_API_KEY`
+     - `IMDB_DATA_SET_ID`
+     - `IMDB_REVISION_ID`
+     - `IMDB_ASSET_ID`
 3. Optional overrides:
    - `PORT`
    - `REQUEST_BODY_LIMIT_BYTES`
@@ -53,6 +70,13 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
    - `TMDB_BASE_URL`
    - `TMDB_IMAGE_BASE_URL`
    - `TMDB_TIMEOUT_MS`
+   - `IMDB_API_URL`
+   - `IMDB_TIMEOUT_MS`
+   - `IMDB_AWS_REGION`
+   - `AWS_PROFILE`
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+   - `AWS_SESSION_TOKEN`
    - `MOVIE_CACHE_TTL_SECONDS`
    - `TV_CACHE_TTL_SECONDS`
    - `MEDIA_STALE_SERVE_WINDOW_SECONDS`
@@ -75,6 +99,8 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 9. Start API: `npm.cmd run start:api`
 10. Start worker: `npm.cmd run start:worker`
 11. Optional local stack via Compose: `npm.cmd run compose:up`
+12. Live provider smoke checks against TMDB and official IMDb: `npm.cmd run test:providers:live`
+13. Live stack smoke checks against a running Compose stack: `npm.cmd run compose:smoke`
 
 ## Current Endpoints
 
@@ -82,6 +108,7 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 - `GET /health/ready`
 - `GET /metrics`
 - `GET /openapi.json`
+- `GET /docs`
 - `GET /api/v1/media/movie?tmdbId=550`
 - `GET /api/v1/media/movie?imdbId=tt0137523`
 - `GET /api/v1/media/movie?mediaId=med_...`
@@ -94,14 +121,16 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 ## Current Limits
 
 - Lookup and provider-backed search only
-- TMDB provider only
+- Search remains TMDB-only
 - Redis is the only state store in this slice
 - Authenticated metadata lookup and search routes are tenant-aware and rate-limited
 - Lookup routes support stale fallback and background refresh for movie and TV records
 - Authenticated routes may return `403` when the upstream auth service denies authorization
-- IMDb-compatible enrichment is still deferred pending approved commercial provider choice
+- Official IMDb integration is optional and limited to lookup enrichment and `imdbId` fallback
+- Without IMDb credentials, the service runs in TMDB-only mode
+- IMDb overrides only `rating`; no broader field merge policy exists in MVP
 - No channel support yet
-- Local manual testing uses a service-owned auth fixture; TMDB remains real even in local Compose workflows
+- Local manual testing uses a service-owned auth fixture; TMDB and IMDb remain real even in local Compose workflows
 
 ## Operations
 
@@ -109,6 +138,7 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 - `GET /health/ready` reflects Redis and BullMQ dependency state for the API runtime.
 - `GET /metrics` exposes Prometheus text metrics.
 - `GET /openapi.json` exposes the live OpenAPI document.
+- `GET /docs` serves the interactive OpenAPI UI.
 - Run the worker alongside the API if you want stale refresh, cleanup, and warmup jobs to be processed.
 
 ## Startup And Shutdown
@@ -149,10 +179,16 @@ The local Compose stack boots:
 - `api`
 - `worker`
 
-TMDB is intentionally not mocked. Set a real `TMDB_API_KEY` in `.env`, then run:
+TMDB and official IMDb are intentionally not mocked. Set real provider credentials in `.env`, then run:
 
 ```bash
 npm.cmd run compose:up
+```
+
+If you want to use a local AWS profile for IMDb access inside Compose, use:
+
+```bash
+docker compose -f compose.yaml -f compose.aws-profile.yaml up --build
 ```
 
 The auth fixture defaults to `success` mode and can be switched with:
@@ -165,8 +201,11 @@ Useful commands:
 
 ```bash
 npm.cmd run compose:logs
+npm.cmd run compose:smoke
 npm.cmd run compose:down
 ```
+
+For the full live-validation workflow, see [live-compose-validation.md](/C:/workspace/viseo-metadata-service/docs/runbooks/live-compose-validation.md).
 
 ## Manual Fixtures
 

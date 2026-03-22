@@ -14,6 +14,8 @@
 - `Confirmed`: TV-show lookup works by `mediaId`, `tmdbId`, and `imdbId`.
 - `Confirmed`: Search returns deterministic paged results.
 - `Confirmed`: Responses use the canonical envelope and error taxonomy.
+- `Confirmed`: Official IMDb enrichment overrides `rating` only when available.
+- `Confirmed`: IMDb-only fallback records can be returned for unresolved `imdbId` lookups.
 - `Confirmed`: No `channel` implementation is required for MVP acceptance.
 
 ## Technical Acceptance
@@ -23,9 +25,11 @@
 - `Confirmed`: Provider responses cannot enter stored state unvalidated.
 - `Confirmed`: Background refresh is idempotent and retry-safe.
 - `Confirmed`: Tenant context is enforced across auth, keys, jobs, and logs.
+- `Confirmed`: Live validation workflow exists for Compose, Redis, BullMQ, TMDB, and official IMDb.
 
 ## Documentation Acceptance
 
 - `Confirmed`: `.ai/*` remains the active source of truth.
 - `Confirmed`: `.ai/initial/*` is clearly deprecated and historical.
 - `Confirmed`: OpenAPI matches implemented routes and envelopes.
+- `Confirmed`: Interactive docs are served from `/docs` and are backed by the live OpenAPI document.

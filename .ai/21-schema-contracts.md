@@ -32,6 +32,8 @@
   - `rating`
   - `cast`
   - `images`
+- `Confirmed`: `identifiers.imdbId` is required for IMDb-fallback records.
+- `Confirmed`: `identifiers.tmdbId` is optional for IMDb-fallback records.
 
 ## Provider Snapshot
 
@@ -42,6 +44,7 @@
   - `hash`
   - `payload`
 - `Confirmed`: Snapshot payload remains provider-specific but validated.
+- `Confirmed`: `providerRefs` may contain TMDB and IMDb snapshots together for a single canonical record.
 
 ## Search Snapshot
 

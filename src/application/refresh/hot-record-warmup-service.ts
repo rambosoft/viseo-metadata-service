@@ -80,7 +80,7 @@ export class HotRecordWarmupService {
       language: job.language,
     });
     this.metrics.observe("provider_latency_ms", Date.now() - startedAt, {
-      provider: "tmdb",
+      provider: providerResult?.provider ?? "composite",
       operation: "warmup_lookup",
       success: providerResult !== null,
     });
