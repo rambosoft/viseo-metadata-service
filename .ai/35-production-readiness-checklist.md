@@ -18,6 +18,8 @@
 - `Confirmed`: Logs redact secrets and include request correlation.
 - `Confirmed`: Metrics and readiness reflect dependency state.
 - `Confirmed`: Docker build is multi-stage and runs as non-root.
+- `Confirmed`: Local Compose workflow exists for Redis, auth fixture, API, and worker.
 - `Confirmed`: `.env.example` documents required settings.
 - `Confirmed`: `.ai/*` docs match implemented behavior and `.ai/initial/*` remains historical only.
 - `Confirmed`: Queue jobs are validated on enqueue and execution, and cache corruption triggers eviction plus safe fallback.
+- `Confirmed`: Real Redis and BullMQ validation exists beyond the mock-heavy baseline.

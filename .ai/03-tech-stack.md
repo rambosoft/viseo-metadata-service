@@ -23,6 +23,7 @@
 | Logging | Pino JSON logs | Confirmed |
 | API docs | OpenAPI 3.1 | Confirmed |
 | Containers | Docker multi-stage image | Confirmed |
+| Local orchestration | Docker Compose for Redis, auth fixture, API, and worker | Confirmed |
 
 ## Rejected For MVP
 
@@ -30,7 +31,7 @@
 - `Confirmed`: Axios is not the default HTTP client.
 - `Confirmed`: Winston is not the canonical logger.
 - `Confirmed`: BullMQ 3-era guidance is stale and not authoritative.
-- `Deferred`: Docker Compose is not required by the current canonical runtime.
+- `Confirmed`: TMDB remains external even in local Compose workflows; provider emulation is not part of the canonical local stack.
 
 ## Selection Rules
 

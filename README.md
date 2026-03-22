@@ -11,6 +11,8 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 - BullMQ-backed stale refresh, derived-cache cleanup, and hot-record warmup job flows
 - stale-but-servable lookup fallback for movie and TV records
 - Redis-backed cross-instance lookup miss coordination
+- local auth fixture harness for dependency-light manual validation
+- Docker Compose workflow for API, worker, Redis, and auth fixtures
 - readiness reporting for Redis and BullMQ dependencies
 - `GET /api/v1/media/movie`
 - `GET /api/v1/media/tv`
@@ -68,9 +70,11 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 4. Build: `npm.cmd run build`
 5. Test: `npm.cmd test`
 6. Performance checks: `npm.cmd run test:performance`
-7. Start API: `npm.cmd run start:api`
-8. Start worker: `npm.cmd run start:worker`
-9. Optional real Redis integration tests: `npm.cmd run test:redis`
+7. Real infra checks with live Redis/BullMQ: `npm.cmd run test:infra`
+8. Start local auth fixture only: `npm.cmd run fixtures:manual`
+9. Start API: `npm.cmd run start:api`
+10. Start worker: `npm.cmd run start:worker`
+11. Optional local stack via Compose: `npm.cmd run compose:up`
 
 ## Current Endpoints
 
@@ -97,6 +101,7 @@ Redis-first multi-tenant metadata API for movie and TV lookup and search. The cu
 - Authenticated routes may return `403` when the upstream auth service denies authorization
 - IMDb-compatible enrichment is still deferred pending approved commercial provider choice
 - No channel support yet
+- Local manual testing uses a service-owned auth fixture; TMDB remains real even in local Compose workflows
 
 ## Operations
 
@@ -134,3 +139,44 @@ docker run --rm --env-file .env viseo-metadata-service node dist/worker.js
 ```
 
 The image is multi-stage, runs as non-root, and defaults to the API command. The worker uses the same image with an overridden command.
+
+## Local Compose
+
+The local Compose stack boots:
+
+- `redis`
+- `auth-fixtures`
+- `api`
+- `worker`
+
+TMDB is intentionally not mocked. Set a real `TMDB_API_KEY` in `.env`, then run:
+
+```bash
+npm.cmd run compose:up
+```
+
+The auth fixture defaults to `success` mode and can be switched with:
+
+- `MANUAL_FIXTURE_AUTH_MODE=success`
+- `MANUAL_FIXTURE_AUTH_MODE=401`
+- `MANUAL_FIXTURE_AUTH_MODE=403`
+
+Useful commands:
+
+```bash
+npm.cmd run compose:logs
+npm.cmd run compose:down
+```
+
+## Manual Fixtures
+
+`scripts/manual-test-fixtures/` contains a small local auth harness for running the real service without an external auth dependency.
+
+- `POST /validate`
+- `GET /health/live`
+
+Run it directly with:
+
+```bash
+npm.cmd run fixtures:manual
+```

@@ -1,0 +1,81 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  auth-fixtures:
+    image: node:24-alpine
+    working_dir: /workspace
+    command:
+      - node
+      - --env-file=/workspace/.env
+      - /workspace/scripts/manual-test-fixtures/run-fixtures.mjs
+    environment:
+      MANUAL_FIXTURE_BIND_HOST: 0.0.0.0
+      MANUAL_FIXTURE_AUTH_PORT: ${MANUAL_FIXTURE_AUTH_PORT:-4010}
+      MANUAL_FIXTURE_AUTH_MODE: ${MANUAL_FIXTURE_AUTH_MODE:-success}
+      MANUAL_FIXTURE_TOKEN: ${MANUAL_FIXTURE_TOKEN:-demo-token}
+      MANUAL_FIXTURE_TENANT_ID: ${MANUAL_FIXTURE_TENANT_ID:-tenant_demo}
+      MANUAL_FIXTURE_PRINCIPAL_ID: ${MANUAL_FIXTURE_PRINCIPAL_ID:-principal_demo}
+      MANUAL_FIXTURE_SCOPES: ${MANUAL_FIXTURE_SCOPES:-metadata:read}
+      MANUAL_FIXTURE_EXPIRES_IN_SECONDS: ${MANUAL_FIXTURE_EXPIRES_IN_SECONDS:-3600}
+    volumes:
+      - .:/workspace:ro
+    ports:
+      - "${MANUAL_FIXTURE_AUTH_PORT:-4010}:${MANUAL_FIXTURE_AUTH_PORT:-4010}"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:' + (process.env.MANUAL_FIXTURE_AUTH_PORT ?? '4010') + '/health/live').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-fixtures:${MANUAL_FIXTURE_AUTH_PORT:-4010}
+      PORT: 3000
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-fixtures:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    build:
+      context: .
+    command: ["node", "dist/worker.js"]
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-fixtures:${MANUAL_FIXTURE_AUTH_PORT:-4010}
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-fixtures:
+        condition: service_healthy

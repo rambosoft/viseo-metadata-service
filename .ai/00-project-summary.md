@@ -16,6 +16,7 @@
 - `Deferred`: IMDb-compatible provider work remains planned behind a provider boundary, but is not currently implemented.
 - `Confirmed`: Redis is the MVP operational store for canonical snapshots, cached search results, lookup caches, and local fetched-record index state.
 - `Confirmed`: Authentication is external, but tenant context and auth caching are part of this service.
+- `Confirmed`: Local MVP operation can run with Compose plus a service-owned auth fixture, while TMDB stays real.
 
 ## Stable Terminology
 
