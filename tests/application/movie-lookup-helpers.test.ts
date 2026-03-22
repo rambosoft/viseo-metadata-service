@@ -19,9 +19,10 @@ describe("movie lookup helpers", () => {
   });
 
   it("computes freshness windows", () => {
-    const freshness = computeFreshness(fixedClock, 3600);
+    const freshness = computeFreshness(fixedClock, 3600, 86400);
     expect(freshness.cacheTtlSeconds).toBe(3600);
     expect(freshness.lastFetchedAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(freshness.serveStaleUntil).toBe("2026-01-02T01:00:00.000Z");
   });
 
   it("builds different media ids for movie and tv lookups", () => {

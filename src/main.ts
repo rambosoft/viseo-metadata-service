@@ -25,7 +25,7 @@ async function main() {
         resolve();
       });
     });
-    runtime.redis.disconnect();
+    await runtime.close();
   };
 
   process.on("SIGINT", () => {

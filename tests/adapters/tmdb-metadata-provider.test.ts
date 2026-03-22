@@ -37,7 +37,9 @@ describe("TmdbMetadataProvider", () => {
         apiKey: "secret",
         timeoutMs: 1000,
         movieTtlSeconds: 3600,
-        tvTtlSeconds: 7200
+        tvTtlSeconds: 7200,
+        staleServeWindowSeconds: 86400,
+        canonicalRecordTtlSeconds: 604800,
       },
       fixedClock
     );
@@ -68,7 +70,9 @@ describe("TmdbMetadataProvider", () => {
         apiKey: "secret",
         timeoutMs: 1000,
         movieTtlSeconds: 3600,
-        tvTtlSeconds: 7200
+        tvTtlSeconds: 7200,
+        staleServeWindowSeconds: 86400,
+        canonicalRecordTtlSeconds: 604800,
       },
       fixedClock
     );
@@ -128,7 +132,9 @@ describe("TmdbMetadataProvider", () => {
         apiKey: "secret",
         timeoutMs: 1000,
         movieTtlSeconds: 3600,
-        tvTtlSeconds: 7200
+        tvTtlSeconds: 7200,
+        staleServeWindowSeconds: 86400,
+        canonicalRecordTtlSeconds: 604800,
       },
       fixedClock
     );

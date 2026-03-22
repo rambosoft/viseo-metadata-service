@@ -3,8 +3,8 @@ export function createOpenApiDocument() {
     openapi: "3.1.0",
     info: {
       title: "Viseo Metadata Service",
-      version: "0.2.0",
-      description: "Redis-first multi-tenant metadata lookup service for movie and TV records.",
+      version: "0.3.0",
+      description: "Redis-first multi-tenant metadata lookup service with search, stale fallback, and background refresh for movie and TV records.",
     },
     servers: [{ url: "/" }],
     components: {

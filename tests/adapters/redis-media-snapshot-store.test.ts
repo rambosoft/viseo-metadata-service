@@ -1,10 +1,16 @@
 import Redis from "ioredis-mock";
+import { setTimeout as delay } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
 
 import { RedisKeyBuilder } from "../../src/adapters/redis-store/redis-key-builder.js";
 import { RedisMediaSnapshotStore } from "../../src/adapters/redis-store/redis-media-snapshot-store.js";
 import type { MediaRecord } from "../../src/core/media/types.js";
 import { buildSearchRequestFingerprint } from "../../src/application/search/media-search-helpers.js";
+import type { ClockPort } from "../../src/ports/shared/clock-port.js";
+
+const fixedClock: ClockPort = {
+  now: () => new Date("2026-01-01T00:00:00.000Z"),
+};
 
 function buildMovieRecord(): MediaRecord {
   return {
@@ -34,7 +40,8 @@ function buildMovieRecord(): MediaRecord {
       lastFetchedAt: "2026-01-01T00:00:00.000Z",
       cacheTtlSeconds: 3600,
       staleAfter: "2026-01-01T01:00:00.000Z",
-      refreshAfter: "2026-01-01T00:45:00.000Z"
+      refreshAfter: "2026-01-01T00:45:00.000Z",
+      serveStaleUntil: "2026-01-02T01:00:00.000Z",
     },
     schemaVersion: 1,
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -70,7 +77,8 @@ function buildTvRecord(): MediaRecord {
       lastFetchedAt: "2026-01-01T00:00:00.000Z",
       cacheTtlSeconds: 3600,
       staleAfter: "2026-01-01T01:00:00.000Z",
-      refreshAfter: "2026-01-01T00:45:00.000Z"
+      refreshAfter: "2026-01-01T00:45:00.000Z",
+      serveStaleUntil: "2026-01-02T01:00:00.000Z",
     },
     schemaVersion: 1,
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -86,7 +94,14 @@ function buildTvRecord(): MediaRecord {
 describe("RedisMediaSnapshotStore", () => {
   it("stores and resolves a movie snapshot by tmdbId", async () => {
     const redis = new Redis();
-    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600, 900, 21600);
+    const store = new RedisMediaSnapshotStore(
+      redis as never,
+      new RedisKeyBuilder("md"),
+      fixedClock,
+      604800,
+      900,
+      21600,
+    );
     const record = buildMovieRecord();
 
     await store.putSnapshot(record);
@@ -101,7 +116,14 @@ describe("RedisMediaSnapshotStore", () => {
 
   it("stores and resolves a TV snapshot by imdbId", async () => {
     const redis = new Redis();
-    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600, 900, 21600);
+    const store = new RedisMediaSnapshotStore(
+      redis as never,
+      new RedisKeyBuilder("md"),
+      fixedClock,
+      604800,
+      900,
+      21600,
+    );
     const record = buildTvRecord();
 
     await store.putSnapshot(record);
@@ -117,7 +139,14 @@ describe("RedisMediaSnapshotStore", () => {
 
   it("stores and resolves a search snapshot", async () => {
     const redis = new Redis();
-    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600, 900, 21600);
+    const store = new RedisMediaSnapshotStore(
+      redis as never,
+      new RedisKeyBuilder("md"),
+      fixedClock,
+      604800,
+      900,
+      21600,
+    );
     const record = buildMovieRecord();
     const fingerprint = buildSearchRequestFingerprint({
       tenantId: "tenant_1",
@@ -161,7 +190,14 @@ describe("RedisMediaSnapshotStore", () => {
 
   it("indexes lookup snapshots for deterministic local search", async () => {
     const redis = new Redis();
-    const store = new RedisMediaSnapshotStore(redis as never, new RedisKeyBuilder("md"), 3600, 900, 21600);
+    const store = new RedisMediaSnapshotStore(
+      redis as never,
+      new RedisKeyBuilder("md"),
+      fixedClock,
+      604800,
+      900,
+      21600,
+    );
     await store.putSnapshot(buildMovieRecord());
     await store.putSnapshot(buildTvRecord());
 
@@ -175,5 +211,43 @@ describe("RedisMediaSnapshotStore", () => {
 
     expect(found.total).toBe(1);
     expect(found.items[0]?.title).toBe("Breaking Bad");
+  });
+
+  it("keeps a canonical snapshot after hot lookup expiry and marks it stale when servable", async () => {
+    let nowMs = Date.parse("2026-01-01T00:00:00.000Z");
+    const mutableClock: ClockPort = {
+      now: () => new Date(nowMs),
+    };
+    const redis = new Redis();
+    const store = new RedisMediaSnapshotStore(
+      redis as never,
+      new RedisKeyBuilder("md"),
+      mutableClock,
+      604800,
+      900,
+      21600,
+    );
+    const record = {
+      ...buildMovieRecord(),
+      freshness: {
+        ...buildMovieRecord().freshness,
+        cacheTtlSeconds: 1,
+        staleAfter: "2026-01-01T00:00:01.000Z",
+        refreshAfter: "2026-01-01T00:00:00.500Z",
+        serveStaleUntil: "2026-01-01T01:00:00.000Z",
+      },
+    } satisfies MediaRecord;
+
+    await store.putSnapshot(record);
+    await delay(1100);
+    nowMs += 1100;
+
+    const found = await store.getLookup(record.tenantId, "movie", {
+      type: "tmdbId",
+      value: "550",
+    });
+
+    expect(found?.state).toBe("stale_but_servable");
+    expect(found?.record.canonicalTitle).toBe("Fight Club");
   });
 });

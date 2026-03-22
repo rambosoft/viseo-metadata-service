@@ -29,6 +29,7 @@ export type FreshnessState = Readonly<{
   cacheTtlSeconds: number;
   staleAfter: string;
   refreshAfter: string;
+  serveStaleUntil: string;
 }>;
 
 type BaseMediaRecord = Readonly<{

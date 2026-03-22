@@ -10,6 +10,7 @@ import type { LookupIdentifier } from "../providers/metadata-provider-port.js";
 
 export type CachedMediaLookup = Readonly<{
   record: MediaRecord;
+  state: "fresh" | "stale_but_servable";
   source: "cache";
 }>;
 

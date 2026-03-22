@@ -13,9 +13,12 @@
     "test": "vitest run",
     "test:redis": "vitest run tests/integration/real-redis.integration.test.ts",
     "test:watch": "vitest",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "start:api": "node dist/main.js",
+    "start:worker": "node dist/worker.js"
   },
   "dependencies": {
+    "bullmq": "^5.56.1",
     "express": "^5.1.0",
     "ioredis": "^5.4.1",
     "pino": "^9.3.2",

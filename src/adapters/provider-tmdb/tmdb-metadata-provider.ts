@@ -37,6 +37,8 @@ type TmdbConfig = Readonly<{
   timeoutMs: number;
   movieTtlSeconds: number;
   tvTtlSeconds: number;
+  staleServeWindowSeconds: number;
+  canonicalRecordTtlSeconds: number;
 }>;
 
 export class TmdbMetadataProvider implements MetadataProviderPort {
@@ -200,7 +202,11 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
         }
       ],
       contentHash,
-      freshness: computeFreshness(this.clockPort, this.tmdbConfig.movieTtlSeconds),
+      freshness: computeFreshness(
+        this.clockPort,
+        this.tmdbConfig.movieTtlSeconds,
+        this.tmdbConfig.staleServeWindowSeconds,
+      ),
       schemaVersion: 1,
       createdAt: now,
       updatedAt: now
@@ -264,7 +270,11 @@ export class TmdbMetadataProvider implements MetadataProviderPort {
         }
       ],
       contentHash,
-      freshness: computeFreshness(this.clockPort, this.tmdbConfig.tvTtlSeconds),
+      freshness: computeFreshness(
+        this.clockPort,
+        this.tmdbConfig.tvTtlSeconds,
+        this.tmdbConfig.staleServeWindowSeconds,
+      ),
       schemaVersion: 1,
       createdAt: now,
       updatedAt: now

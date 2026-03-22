@@ -22,12 +22,18 @@ import type {
   CachedSearchSnapshot,
   MediaSnapshotStorePort
 } from "../../ports/storage/media-snapshot-store-port.js";
-import { toMediaId, toTenantId } from "../../application/lookup/media-lookup-helpers.js";
+import {
+  isRecordFresh,
+  isRecordStaleButServable,
+  toMediaId,
+  toTenantId,
+} from "../../application/lookup/media-lookup-helpers.js";
 import {
   normalizeSearchText,
   scoreSearchItem,
   tokenizeSearchText,
 } from "../../application/search/media-search-helpers.js";
+import type { ClockPort } from "../../ports/shared/clock-port.js";
 import { RedisKeyBuilder } from "./redis-key-builder.js";
 import {
   cachedMediaRecordSchema,
@@ -42,7 +48,8 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
       "expire" | "get" | "mget" | "ping" | "sadd" | "setex" | "smembers" | "srem"
     >,
     private readonly keyBuilder: RedisKeyBuilder,
-    private readonly defaultTtlSeconds: number,
+    private readonly clockPort: ClockPort,
+    private readonly canonicalTtlSeconds: number,
     private readonly searchSnapshotTtlSeconds: number,
     private readonly searchIndexTtlSeconds: number,
   ) {}
@@ -52,64 +59,75 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
     kind: MediaKind,
     identifier: LookupIdentifier
   ): Promise<CachedMediaLookup | null> {
-    const lookupKey = this.keyBuilder.mediaLookup(tenantId, kind, identifier);
-    const recordKeyOrPayload = await this.redis.get(lookupKey);
-    if (recordKeyOrPayload === null) {
-      return null;
+    const hotLookup = await this.readLookupPointer(
+      this.keyBuilder.mediaLookupHot(tenantId, kind, identifier),
+    );
+    if (hotLookup !== null) {
+      return hotLookup;
     }
 
-    const maybeRecordJson = recordKeyOrPayload.startsWith("{")
-      ? recordKeyOrPayload
-      : await this.redis.get(recordKeyOrPayload);
-
-    if (maybeRecordJson === null) {
-      return null;
-    }
-
-    try {
-      const parsed = cachedMediaRecordSchema.parse(JSON.parse(maybeRecordJson));
-      return {
-        record: this.rehydrateRecord(parsed),
-        source: "cache"
-      };
-    } catch {
-      return null;
-    }
+    return this.readLookupPointer(
+      this.keyBuilder.mediaLookupCanonical(tenantId, kind, identifier),
+    );
   }
 
   public async putSnapshot(record: MediaRecord): Promise<void> {
-    const ttlSeconds = Math.max(record.freshness.cacheTtlSeconds, this.defaultTtlSeconds);
     const recordKey = this.keyBuilder.mediaRecord(record.tenantId, record.kind, record.mediaId);
     const serializedRecord = JSON.stringify(record);
+    const hotTtlSeconds = record.freshness.cacheTtlSeconds;
 
-    await this.redis.setex(recordKey, ttlSeconds, serializedRecord);
+    await this.redis.setex(recordKey, this.canonicalTtlSeconds, serializedRecord);
     await this.redis.setex(
-      this.keyBuilder.mediaLookup(record.tenantId, record.kind, {
+      this.keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
         type: "mediaId",
         value: record.mediaId
       }),
-      ttlSeconds,
+      hotTtlSeconds,
+      recordKey
+    );
+    await this.redis.setex(
+      this.keyBuilder.mediaLookupCanonical(record.tenantId, record.kind, {
+        type: "mediaId",
+        value: record.mediaId
+      }),
+      this.canonicalTtlSeconds,
       recordKey
     );
 
     if (record.identifiers.tmdbId !== undefined) {
       await this.redis.setex(
-        this.keyBuilder.mediaLookup(record.tenantId, record.kind, {
+        this.keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
           type: "tmdbId",
           value: record.identifiers.tmdbId
         }),
-        ttlSeconds,
+        hotTtlSeconds,
+        recordKey
+      );
+      await this.redis.setex(
+        this.keyBuilder.mediaLookupCanonical(record.tenantId, record.kind, {
+          type: "tmdbId",
+          value: record.identifiers.tmdbId
+        }),
+        this.canonicalTtlSeconds,
         recordKey
       );
     }
 
     if (record.identifiers.imdbId !== undefined) {
       await this.redis.setex(
-        this.keyBuilder.mediaLookup(record.tenantId, record.kind, {
+        this.keyBuilder.mediaLookupHot(record.tenantId, record.kind, {
           type: "imdbId",
           value: record.identifiers.imdbId
         }),
-        ttlSeconds,
+        hotTtlSeconds,
+        recordKey
+      );
+      await this.redis.setex(
+        this.keyBuilder.mediaLookupCanonical(record.tenantId, record.kind, {
+          type: "imdbId",
+          value: record.identifiers.imdbId
+        }),
+        this.canonicalTtlSeconds,
         recordKey
       );
     }
@@ -286,6 +304,46 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
       return result === "PONG";
     } catch {
       throw new DependencyUnavailableError("Redis unavailable");
+    }
+  }
+
+  private async readLookupPointer(key: string): Promise<CachedMediaLookup | null> {
+    const recordKeyOrPayload = await this.redis.get(key);
+    if (recordKeyOrPayload === null) {
+      return null;
+    }
+
+    const maybeRecordJson = recordKeyOrPayload.startsWith("{")
+      ? recordKeyOrPayload
+      : await this.redis.get(recordKeyOrPayload);
+
+    if (maybeRecordJson === null) {
+      return null;
+    }
+
+    try {
+      const parsed = cachedMediaRecordSchema.parse(JSON.parse(maybeRecordJson));
+      const record = this.rehydrateRecord(parsed);
+
+      if (isRecordFresh(this.clockPort, record)) {
+        return {
+          record,
+          state: "fresh",
+          source: "cache",
+        };
+      }
+
+      if (isRecordStaleButServable(this.clockPort, record)) {
+        return {
+          record,
+          state: "stale_but_servable",
+          source: "cache",
+        };
+      }
+
+      return null;
+    } catch {
+      return null;
     }
   }
 

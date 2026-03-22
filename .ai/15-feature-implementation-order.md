@@ -20,7 +20,7 @@
 8. `Confirmed`: TV-show provider flow and endpoint parity
 9. `Confirmed`: Search provider flow, cached search snapshots, local fetched-record index updates
 10. `Confirmed`: Search endpoint and paging contracts
-11. `Confirmed`: IMDb-compatible adapter and identifier enrichment path
+11. `Deferred`: IMDb-compatible adapter and identifier enrichment path pending commercially approved provider
 12. `Confirmed`: Background refresh, cleanup, retry, and warmup jobs
 13. `Confirmed`: Metrics, readiness detail, stale fallback logic, performance tests
 14. `Confirmed`: Final documentation truth check against implemented behavior
@@ -29,6 +29,8 @@
 
 - `Confirmed`: Build the movie lookup path as the first full vertical slice.
 - `Confirmed`: Movie lookup, TV lookup, and search are now the implemented parity baseline.
-- `Confirmed`: The next delivery slice is IMDb-compatible adapter work and identifier enrichment.
+- `Confirmed`: Search, stale fallback, and refresh flow are now the implemented parity baseline.
+- `Confirmed`: The next delivery slice is metrics, readiness detail, resilience, and performance hardening.
+- `Confirmed`: IMDb-compatible adapter work remains deferred until a commercially approved provider is selected.
 - `Confirmed`: Do not build `channel` endpoints in MVP.
 - `Confirmed`: Do not add new providers before TMDB and the IMDb-compatible path are stable.

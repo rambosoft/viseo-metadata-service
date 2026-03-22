@@ -29,12 +29,20 @@ export class RedisKeyBuilder {
     return `${this.namespace}:v1:tenant:${tenantId}:${kind}:record:${mediaId}`;
   }
 
-  public mediaLookup(
+  public mediaLookupHot(
     tenantId: TenantId,
     kind: MediaKind,
     identifier: LookupIdentifier,
   ): string {
-    return `${this.namespace}:v1:tenant:${tenantId}:${kind}:lookup:${identifier.type}:${identifier.value}`;
+    return `${this.namespace}:v1:tenant:${tenantId}:${kind}:lookup:hot:${identifier.type}:${identifier.value}`;
+  }
+
+  public mediaLookupCanonical(
+    tenantId: TenantId,
+    kind: MediaKind,
+    identifier: LookupIdentifier,
+  ): string {
+    return `${this.namespace}:v1:tenant:${tenantId}:${kind}:lookup:canonical:${identifier.type}:${identifier.value}`;
   }
 
   public searchSnapshot(
@@ -54,5 +62,18 @@ export class RedisKeyBuilder {
     token: string,
   ): string {
     return `${this.namespace}:v1:tenant:${tenantId}:search:index:${kind}:token:${token}`;
+  }
+
+  public lookupSingleFlight(
+    tenantId: TenantId,
+    kind: MediaKind,
+    identifier: LookupIdentifier,
+  ): string {
+    const scopeHash = createHash("sha256")
+      .update(`${kind}:${identifier.type}:${identifier.value}`)
+      .digest("hex")
+      .slice(0, 16);
+
+    return `${this.namespace}:v1:tenant:${tenantId}:lookup:single-flight:${scopeHash}`;
   }
 }

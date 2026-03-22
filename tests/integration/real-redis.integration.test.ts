@@ -6,8 +6,12 @@ import { RedisKeyBuilder } from "../../src/adapters/redis-store/redis-key-builde
 import { RedisMediaSnapshotStore } from "../../src/adapters/redis-store/redis-media-snapshot-store.js";
 import { buildSearchRequestFingerprint } from "../../src/application/search/media-search-helpers.js";
 import type { MediaRecord } from "../../src/core/media/types.js";
+import type { ClockPort } from "../../src/ports/shared/clock-port.js";
 
 const redisUrl = process.env.REDIS_URL;
+const fixedClock: ClockPort = {
+  now: () => new Date("2026-01-01T00:00:00.000Z"),
+};
 
 function buildMovieRecord(prefix: string): MediaRecord {
   return {
@@ -37,7 +41,8 @@ function buildMovieRecord(prefix: string): MediaRecord {
       lastFetchedAt: "2026-01-01T00:00:00.000Z",
       cacheTtlSeconds: 3600,
       staleAfter: "2026-01-01T01:00:00.000Z",
-      refreshAfter: "2026-01-01T00:45:00.000Z"
+      refreshAfter: "2026-01-01T00:45:00.000Z",
+      serveStaleUntil: "2026-01-02T01:00:00.000Z",
     },
     schemaVersion: 1,
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -67,7 +72,14 @@ describe.skipIf(redisUrl === undefined || redisUrl.length === 0)(
     });
 
     it("stores and resolves snapshots against a real Redis instance", async () => {
-      const store = new RedisMediaSnapshotStore(redis, new RedisKeyBuilder(prefix), 3600, 900, 21600);
+      const store = new RedisMediaSnapshotStore(
+        redis,
+        new RedisKeyBuilder(prefix),
+        fixedClock,
+        604800,
+        900,
+        21600,
+      );
       const record = buildMovieRecord(prefix);
 
       await store.putSnapshot(record);
@@ -81,7 +93,14 @@ describe.skipIf(redisUrl === undefined || redisUrl.length === 0)(
     });
 
     it("stores and resolves search data against a real Redis instance", async () => {
-      const store = new RedisMediaSnapshotStore(redis, new RedisKeyBuilder(prefix), 3600, 900, 21600);
+      const store = new RedisMediaSnapshotStore(
+        redis,
+        new RedisKeyBuilder(prefix),
+        fixedClock,
+        604800,
+        900,
+        21600,
+      );
       const record = buildMovieRecord(prefix);
       await store.putSnapshot(record);
 

@@ -18,8 +18,18 @@ const envSchema = z.object({
   TMDB_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   MOVIE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   TV_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  MEDIA_STALE_SERVE_WINDOW_SECONDS: z.coerce.number().int().positive().default(86400),
+  CANONICAL_RECORD_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+  LOOKUP_SINGLEFLIGHT_TTL_SECONDS: z.coerce.number().int().positive().default(5),
+  LOOKUP_SINGLEFLIGHT_WAIT_MS: z.coerce.number().int().positive().default(500),
   SEARCH_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   SEARCH_INDEX_TTL_SECONDS: z.coerce.number().int().positive().default(21600),
+  REFRESH_QUEUE_NAME: z.string().min(1).default("metadata-refresh"),
+  REFRESH_JOB_ATTEMPTS: z.coerce.number().int().positive().default(3),
+  REFRESH_JOB_BACKOFF_MS: z.coerce.number().int().nonnegative().default(1000),
+  REFRESH_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  REFRESH_DEDUP_TTL_SECONDS: z.coerce.number().int().positive().default(60),
+  WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
 });
 
 export type AppConfig = Readonly<{
@@ -49,15 +59,43 @@ export type AppConfig = Readonly<{
     timeoutMs: number;
     movieTtlSeconds: number;
     tvTtlSeconds: number;
+    staleServeWindowSeconds: number;
+    canonicalRecordTtlSeconds: number;
+  };
+  coordination: {
+    lookupTtlSeconds: number;
+    lookupWaitMs: number;
   };
   search: {
     cacheTtlSeconds: number;
     indexTtlSeconds: number;
   };
+  refresh: {
+    queueName: string;
+    jobAttempts: number;
+    jobBackoffMs: number;
+    workerConcurrency: number;
+    dedupTtlSeconds: number;
+    workerShutdownTimeoutMs: number;
+  };
 }>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = envSchema.parse(env);
+  const maxHotTtlSeconds = Math.max(
+    parsed.MOVIE_CACHE_TTL_SECONDS,
+    parsed.TV_CACHE_TTL_SECONDS,
+  );
+
+  if (
+    parsed.CANONICAL_RECORD_TTL_SECONDS <
+    maxHotTtlSeconds + parsed.MEDIA_STALE_SERVE_WINDOW_SECONDS
+  ) {
+    throw new Error(
+      "CANONICAL_RECORD_TTL_SECONDS must be at least MOVIE/TV cache TTL plus MEDIA_STALE_SERVE_WINDOW_SECONDS",
+    );
+  }
+
   return {
     server: {
       nodeEnv: parsed.NODE_ENV,
@@ -84,11 +122,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       apiKey: parsed.TMDB_API_KEY,
       timeoutMs: parsed.TMDB_TIMEOUT_MS,
       movieTtlSeconds: parsed.MOVIE_CACHE_TTL_SECONDS,
-      tvTtlSeconds: parsed.TV_CACHE_TTL_SECONDS
+      tvTtlSeconds: parsed.TV_CACHE_TTL_SECONDS,
+      staleServeWindowSeconds: parsed.MEDIA_STALE_SERVE_WINDOW_SECONDS,
+      canonicalRecordTtlSeconds: parsed.CANONICAL_RECORD_TTL_SECONDS,
+    },
+    coordination: {
+      lookupTtlSeconds: parsed.LOOKUP_SINGLEFLIGHT_TTL_SECONDS,
+      lookupWaitMs: parsed.LOOKUP_SINGLEFLIGHT_WAIT_MS,
     },
     search: {
       cacheTtlSeconds: parsed.SEARCH_CACHE_TTL_SECONDS,
       indexTtlSeconds: parsed.SEARCH_INDEX_TTL_SECONDS,
+    },
+    refresh: {
+      queueName: parsed.REFRESH_QUEUE_NAME,
+      jobAttempts: parsed.REFRESH_JOB_ATTEMPTS,
+      jobBackoffMs: parsed.REFRESH_JOB_BACKOFF_MS,
+      workerConcurrency: parsed.REFRESH_WORKER_CONCURRENCY,
+      dedupTtlSeconds: parsed.REFRESH_DEDUP_TTL_SECONDS,
+      workerShutdownTimeoutMs: parsed.WORKER_SHUTDOWN_TIMEOUT_MS,
     }
   };
 }

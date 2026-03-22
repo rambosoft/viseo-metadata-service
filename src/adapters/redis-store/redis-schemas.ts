@@ -37,7 +37,8 @@ const cachedBaseMediaRecordSchema = z.object({
     lastFetchedAt: z.string(),
     cacheTtlSeconds: z.number().int(),
     staleAfter: z.string(),
-    refreshAfter: z.string()
+    refreshAfter: z.string(),
+    serveStaleUntil: z.string()
   }),
   schemaVersion: z.literal(1),
   createdAt: z.string(),
