@@ -10,9 +10,9 @@
 
 | ID | Title | Status | Source Files | Rationale | Impact | Downstream Dependencies |
 | --- | --- | --- | --- | --- | --- | --- |
-| DEC-001 | Canonical product is metadata API | Confirmed | `Media Metadata API Service - Node js TypeScript.md`, `Project Scope - Media Metadata API Service.md`, user clarification | Matches approved product direction and avoids mixing with playlist gateway behavior | High | All foundation and contract docs |
+| DEC-001 | Canonical product is metadata API | Confirmed | `Media Metadata API Service - Node js TypeScript.md`, `Project Scope - Media Metadata API Service.md`, user clarification | Matches approved product direction and avoids mixing unrelated ingestion architectures into the project | High | All foundation and contract docs |
 | DEC-002 | MVP is multi-tenant core | Confirmed | `deep-research-report.md`, user clarification | Tenant isolation is architecturally important even without tier enforcement | High | Auth, cache keys, jobs, logging |
-| DEC-003 | MVP persistence is Redis-first | Confirmed | `deep-research-report.md`, metadata-service source set, user clarification | Supports fast operational reads, snapshots, and local index without MongoDB-first coupling | High | Architecture, schema contracts, implementation order |
+| DEC-003 | MVP persistence is Redis-first | Confirmed | metadata-service source set, user clarification | Supports fast operational reads, snapshots, and local index without MongoDB-first coupling | High | Architecture, schema contracts, implementation order |
 | DEC-004 | TMDB and IMDb-compatible providers are both in MVP | Confirmed | Metadata-service source set, user clarification | Needed for identifier coverage and provider abstraction | High | Provider ports, normalization, API behavior |
 | DEC-005 | Search model is hybrid | Confirmed | Mixed source set, user clarification | Allows provider-backed search plus local acceleration over fetched records | High | API contracts, Redis design, background refresh |
 | DEC-006 | Local index covers fetched records only | Confirmed | user clarification | Keeps MVP ingestion realistic and bounded | High | Search contracts, refresh jobs, NFRs |
@@ -23,4 +23,4 @@
 | DEC-011 | `channel` is reserved but not implemented in MVP | Proposed | older metadata docs, provider mismatch | TMDB and IMDb do not provide a strong MVP channel path | Medium | Scope, API contracts, feature map |
 | DEC-012 | Auth contract stays external behind a port | Proposed | metadata docs, deep research | Avoids inventing a concrete upstream auth schema | Medium | Domain boundaries, validation rules |
 | DEC-013 | No field-level provider merge heuristics in MVP | Confirmed | approved plan | Prevents unstable canonical mapping | High | Domain model, normalization, acceptance criteria |
-| DEC-014 | `.ai/*` is canonical; `.ai/initial/*` is historical only | Confirmed | project instructions | Prevents ambiguous source-of-truth behavior | High | README, agent rules, deprecation banners |
+| DEC-014 | `.ai/*` is canonical; `.ai/initial/*` is historical only | Confirmed | project instructions | Prevents ambiguous source-of-truth behavior | High | README, agent rules, historical-doc handling |

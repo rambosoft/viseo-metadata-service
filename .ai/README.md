@@ -44,4 +44,4 @@
 - Do update the relevant canonical docs when behavior changes.
 - Do consult `.ai/source-map.md` if you need to trace a legacy statement.
 - Do not treat `.ai/initial/*` as active scope, architecture, or contract guidance.
-- Do not revive MongoDB-first or Xtream/M3U-first guidance unless a new decision explicitly replaces the current canon.
+- Do not revive superseded non-metadata architecture guidance unless a new decision explicitly replaces the current canon.

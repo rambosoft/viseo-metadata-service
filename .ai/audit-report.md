@@ -10,16 +10,16 @@
 
 ## Source Set
 
-- `Confirmed`: `.ai/initial/deep-research-report.md`
 - `Confirmed`: `.ai/initial/Detailed Task Breakdown - Media Metadata API Service.md`
 - `Confirmed`: `.ai/initial/Media Metadata API Service - Node js TypeScript.md`
 - `Confirmed`: `.ai/initial/Project Scope - Media Metadata API Service.md`
 - `Confirmed`: `.ai/initial/Technical Specifications - Media Metadata API Service.md`
+- `Confirmed`: The unrelated cross-project research file was removed from `.ai/initial` because it was not needed for the metadata-service implementation package.
 
 ## What Exists
 
 - `Confirmed`: A metadata-service product definition built around TMDB and an IMDb-compatible provider.
-- `Confirmed`: A conflicting Redis-first and indexing-heavy architecture direction appears in the research guidance, even though the current historical set is centered on metadata-service docs.
+- `Confirmed`: The remaining historical set is centered on the metadata-service project and delivery plan.
 - `Confirmed`: A future-proofing report that favors Node 24, ports-and-adapters, BullMQ 5, Pino, and strict tenant isolation.
 - `Confirmed`: Two distinct storage models in source material:
   - MongoDB-first canonical persistence
@@ -35,10 +35,9 @@
 
 ## Conflicts
 
-- `Confirmed`: Product conflict between metadata API and playlist gateway.
 - `Confirmed`: Persistence conflict between MongoDB-first and Redis-first models.
 - `Confirmed`: Search conflict between provider passthrough and local indexing.
-- `Confirmed`: Platform drift between older Node 20 / BullMQ 3 / Express 4 guidance and newer 2026 baseline.
+- `Confirmed`: Platform drift between older Node 20 / BullMQ 3 / Express 4 guidance and newer Node 24 / BullMQ 5 / Express 5 guidance.
 - `Confirmed`: Scope conflict around `channel` support because approved MVP providers do not cover a strong channel metadata path.
 
 ## Vague Or Risky Areas

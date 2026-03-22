@@ -27,5 +27,5 @@
 ## Scope Headline
 
 - `Confirmed`: MVP is a read-heavy API with background refresh and deterministic contracts.
-- `Confirmed`: MVP is not a playlist gateway, streaming platform, or generic catalog ingestion system.
+- `Confirmed`: MVP is not a streaming platform, media-delivery system, or broad catalog-ingestion platform.
 - `Proposed`: `channel` remains a reserved media kind but is out of MVP implementation because the approved providers do not cover it well.

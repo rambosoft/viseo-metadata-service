@@ -28,5 +28,5 @@
 ## Non-Negotiable Rules
 
 - `Confirmed`: Ignore `.ai/initial/*` for implementation decisions unless tracing history.
-- `Confirmed`: Do not reintroduce MongoDB-first or Xtream/M3U-first architecture.
+- `Confirmed`: Do not reintroduce superseded non-metadata ingestion architecture.
 - `Confirmed`: Do not implement `channel` in MVP.

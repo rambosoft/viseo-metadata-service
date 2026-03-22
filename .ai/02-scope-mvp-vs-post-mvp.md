@@ -24,7 +24,7 @@
 ## MVP Explicitly Out Of Scope
 
 - `Confirmed`: Not in MVP: MongoDB-backed canonical persistence.
-- `Confirmed`: Not in MVP: Xtream or M3U playlist ingestion.
+- `Confirmed`: Not in MVP: broad upstream catalog ingestion beyond on-demand metadata retrieval and refresh.
 - `Confirmed`: Not in MVP: full provider-catalog sync.
 - `Confirmed`: Not in MVP: channel metadata implementation.
 - `Confirmed`: Not in MVP: billing tiers, quota enforcement, and per-plan TTL policies.

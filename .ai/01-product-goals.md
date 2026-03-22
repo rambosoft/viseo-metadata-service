@@ -26,7 +26,7 @@
 ## Non-Goals
 
 - `Confirmed`: No streaming, transcoding, or content delivery.
-- `Confirmed`: No playlist ingestion from Xtream or M3U sources in this project version.
+- `Confirmed`: No broad upstream catalog-ingestion pipeline is in scope for this project version.
 - `Confirmed`: No commercial quota-tier enforcement in MVP.
 - `Confirmed`: No broad provider-catalog sync in MVP.
 - `Confirmed`: No field-by-field blended canonical record assembled from both providers.
