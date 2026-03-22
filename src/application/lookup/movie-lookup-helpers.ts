@@ -1,0 +1,58 @@
+import { createHash } from "node:crypto";
+
+import type { ClockPort } from "../../ports/shared/clock-port.js";
+import type {
+  LocaleCode,
+  MediaId,
+  MediaRecord,
+  TenantId,
+} from "../../core/media/types.js";
+import type {
+  LookupIdentifier,
+  ProviderLookupResult,
+} from "../../ports/providers/metadata-provider-port.js";
+
+export function toTenantId(value: string): TenantId {
+  return value as TenantId;
+}
+
+export function toMediaId(value: string): MediaId {
+  return value as MediaId;
+}
+
+export function toLocaleCode(value: string): LocaleCode {
+  return value as LocaleCode;
+}
+
+export function buildContentHash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+export function buildMediaId(
+  provider: ProviderLookupResult["provider"],
+  identifier: LookupIdentifier,
+): MediaId {
+  const seed = `${provider}:${identifier.type}:${identifier.value}`;
+  return `med_${createHash("sha256").update(seed).digest("hex").slice(0, 16)}` as MediaId;
+}
+
+export function computeFreshness(clock: ClockPort, ttlSeconds: number): {
+  lastFetchedAt: string;
+  staleAfter: string;
+  refreshAfter: string;
+  cacheTtlSeconds: number;
+} {
+  const now = clock.now();
+  const staleAt = new Date(now.getTime() + ttlSeconds * 1000);
+  const refreshAt = new Date(now.getTime() + Math.floor(ttlSeconds * 0.75) * 1000);
+  return {
+    lastFetchedAt: now.toISOString(),
+    staleAfter: staleAt.toISOString(),
+    refreshAfter: refreshAt.toISOString(),
+    cacheTtlSeconds: ttlSeconds,
+  };
+}
+
+export function isRecordFresh(clock: ClockPort, record: MediaRecord): boolean {
+  return new Date(record.freshness.staleAfter).getTime() > clock.now().getTime();
+}

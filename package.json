@@ -1,0 +1,34 @@
+{
+  "name": "viseo-metadata-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Redis-first metadata service first vertical slice",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "swc src -d dist --config-file .swcrc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "ioredis": "^5.4.1",
+    "pino": "^9.3.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@swc/cli": "^0.5.0",
+    "@swc/core": "^1.7.14",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/supertest": "^6.0.3",
+    "ioredis-mock": "^8.9.0",
+    "supertest": "^7.0.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
