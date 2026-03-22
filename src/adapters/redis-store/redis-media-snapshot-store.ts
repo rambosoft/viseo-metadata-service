@@ -1,13 +1,19 @@
 import type { Redis as RedisClient } from "ioredis";
 
 import { DependencyUnavailableError } from "../../core/shared/errors.js";
-import type { MediaRecord, TenantId } from "../../core/media/types.js";
+import type {
+  MediaKind,
+  MediaRecord,
+  MovieMediaRecord,
+  TenantId,
+  TvMediaRecord,
+} from "../../core/media/types.js";
 import type { LookupIdentifier } from "../../ports/providers/metadata-provider-port.js";
 import type {
-  CachedMovieLookup,
+  CachedMediaLookup,
   MediaSnapshotStorePort
 } from "../../ports/storage/media-snapshot-store-port.js";
-import { toMediaId, toTenantId } from "../../application/lookup/movie-lookup-helpers.js";
+import { toMediaId, toTenantId } from "../../application/lookup/media-lookup-helpers.js";
 import { RedisKeyBuilder } from "./redis-key-builder.js";
 import { cachedMediaRecordSchema } from "./redis-schemas.js";
 
@@ -18,11 +24,12 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
     private readonly defaultTtlSeconds: number
   ) {}
 
-  public async getMovieLookup(
+  public async getLookup(
     tenantId: TenantId,
+    kind: MediaKind,
     identifier: LookupIdentifier
-  ): Promise<CachedMovieLookup | null> {
-    const lookupKey = this.keyBuilder.movieLookup(tenantId, identifier);
+  ): Promise<CachedMediaLookup | null> {
+    const lookupKey = this.keyBuilder.mediaLookup(tenantId, kind, identifier);
     const recordKeyOrPayload = await this.redis.get(lookupKey);
     if (recordKeyOrPayload === null) {
       return null;
@@ -39,16 +46,7 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
     try {
       const parsed = cachedMediaRecordSchema.parse(JSON.parse(maybeRecordJson));
       return {
-        record: {
-          ...parsed,
-          mediaId: toMediaId(parsed.mediaId),
-          tenantId: toTenantId(parsed.tenantId),
-          identifiers: {
-            mediaId: toMediaId(parsed.identifiers.mediaId),
-            ...(parsed.identifiers.tmdbId !== undefined ? { tmdbId: parsed.identifiers.tmdbId } : {}),
-            ...(parsed.identifiers.imdbId !== undefined ? { imdbId: parsed.identifiers.imdbId } : {})
-          }
-        } as MediaRecord,
+        record: this.rehydrateRecord(parsed),
         source: "cache"
       };
     } catch {
@@ -56,14 +54,14 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
     }
   }
 
-  public async putMovieSnapshot(record: MediaRecord): Promise<void> {
+  public async putSnapshot(record: MediaRecord): Promise<void> {
     const ttlSeconds = Math.max(record.freshness.cacheTtlSeconds, this.defaultTtlSeconds);
-    const recordKey = this.keyBuilder.movieRecord(record.tenantId, record.mediaId);
+    const recordKey = this.keyBuilder.mediaRecord(record.tenantId, record.kind, record.mediaId);
     const serializedRecord = JSON.stringify(record);
 
     await this.redis.setex(recordKey, ttlSeconds, serializedRecord);
     await this.redis.setex(
-      this.keyBuilder.movieLookup(record.tenantId, {
+      this.keyBuilder.mediaLookup(record.tenantId, record.kind, {
         type: "mediaId",
         value: record.mediaId
       }),
@@ -73,7 +71,7 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
 
     if (record.identifiers.tmdbId !== undefined) {
       await this.redis.setex(
-        this.keyBuilder.movieLookup(record.tenantId, {
+        this.keyBuilder.mediaLookup(record.tenantId, record.kind, {
           type: "tmdbId",
           value: record.identifiers.tmdbId
         }),
@@ -84,7 +82,7 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
 
     if (record.identifiers.imdbId !== undefined) {
       await this.redis.setex(
-        this.keyBuilder.movieLookup(record.tenantId, {
+        this.keyBuilder.mediaLookup(record.tenantId, record.kind, {
           type: "imdbId",
           value: record.identifiers.imdbId
         }),
@@ -101,5 +99,26 @@ export class RedisMediaSnapshotStore implements MediaSnapshotStorePort {
     } catch {
       throw new DependencyUnavailableError("Redis unavailable");
     }
+  }
+
+  private rehydrateRecord(
+    parsed: typeof cachedMediaRecordSchema._type,
+  ): MediaRecord {
+    const baseRecord = {
+      ...parsed,
+      mediaId: toMediaId(parsed.mediaId),
+      tenantId: toTenantId(parsed.tenantId),
+      identifiers: {
+        mediaId: toMediaId(parsed.identifiers.mediaId),
+        ...(parsed.identifiers.tmdbId !== undefined ? { tmdbId: parsed.identifiers.tmdbId } : {}),
+        ...(parsed.identifiers.imdbId !== undefined ? { imdbId: parsed.identifiers.imdbId } : {})
+      }
+    };
+
+    if (parsed.kind === "movie") {
+      return baseRecord as MovieMediaRecord;
+    }
+
+    return baseRecord as TvMediaRecord;
   }
 }

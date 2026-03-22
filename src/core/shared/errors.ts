@@ -38,9 +38,21 @@ export class AuthenticationError extends AppError {
   }
 }
 
+export class AuthorizationError extends AppError {
+  public constructor(message = "Authorization failed") {
+    super("authorization_failed", message, 403, false);
+  }
+}
+
 export class NotFoundError extends AppError {
   public constructor(message = "Resource not found") {
     super("not_found", message, 404, false);
+  }
+}
+
+export class RateLimitedError extends AppError {
+  public constructor(message = "Rate limit exceeded", retryable = true) {
+    super("rate_limited", message, 429, retryable);
   }
 }
 

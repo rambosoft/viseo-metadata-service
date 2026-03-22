@@ -1,28 +1,25 @@
-import { Redis } from "ioredis";
-
 import { HttpAuthValidationAdapter } from "../adapters/auth-http/http-auth-validation-adapter.js";
 import { TmdbMetadataProvider } from "../adapters/provider-tmdb/tmdb-metadata-provider.js";
+import { RedisRateLimiter } from "../adapters/rate-limit/redis-rate-limiter.js";
 import { RedisKeyBuilder } from "../adapters/redis-store/redis-key-builder.js";
 import { RedisMediaSnapshotStore } from "../adapters/redis-store/redis-media-snapshot-store.js";
-import { MovieLookupService } from "../application/lookup/movie-lookup-service.js";
+import { MediaLookupService } from "../application/lookup/media-lookup-service.js";
 import type { AppConfig } from "../config/env.js";
 import { createApp } from "./create-app.js";
 import { createLogger } from "./logger.js";
+import { createRedisClient } from "./create-redis-client.js";
 import { SystemClock } from "./system-clock.js";
 
 export function createRuntime(config: AppConfig, fetchImpl: typeof fetch = fetch) {
   const logger = createLogger(config.server.logLevel);
   const clock = new SystemClock();
-  const redis = new Redis(config.redis.url, {
-    lazyConnect: false,
-    keyPrefix: ""
-  });
+  const redis = createRedisClient(config.redis);
   const keyBuilder = new RedisKeyBuilder(config.redis.keyPrefix);
 
   const snapshotStore = new RedisMediaSnapshotStore(
     redis,
     keyBuilder,
-    config.tmdb.movieTtlSeconds
+    Math.max(config.tmdb.movieTtlSeconds, config.tmdb.tvTtlSeconds)
   );
   const authValidationPort = new HttpAuthValidationAdapter(
     fetchImpl,
@@ -31,17 +28,19 @@ export function createRuntime(config: AppConfig, fetchImpl: typeof fetch = fetch
     config.auth
   );
   const metadataProviderPort = new TmdbMetadataProvider(fetchImpl, config.tmdb, clock);
-  const movieLookupService = new MovieLookupService(
+  const rateLimiterPort = new RedisRateLimiter(redis, keyBuilder, config.rateLimit);
+  const mediaLookupService = new MediaLookupService(
     authValidationPort,
     snapshotStore,
     metadataProviderPort,
-    clock
+    rateLimiterPort
   );
 
   const app = createApp({
     logger,
-    movieLookupService,
-    snapshotStore
+    mediaLookupService,
+    snapshotStore,
+    requestBodyLimitBytes: config.server.requestBodyLimitBytes
   });
 
   return {

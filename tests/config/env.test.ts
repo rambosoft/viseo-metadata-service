@@ -11,8 +11,11 @@ describe("loadConfig", () => {
     });
 
     expect(config.server.port).toBe(3000);
+    expect(config.server.requestBodyLimitBytes).toBe(16384);
     expect(config.redis.keyPrefix).toBe("md");
+    expect(config.rateLimit.maxRequests).toBe(120);
     expect(config.tmdb.baseUrl).toBe("https://api.themoviedb.org/3");
+    expect(config.tmdb.tvTtlSeconds).toBe(3600);
   });
 
   it("throws when required values are missing", () => {

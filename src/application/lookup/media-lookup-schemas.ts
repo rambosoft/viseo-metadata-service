@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const movieLookupQuerySchema = z
+export const mediaLookupQuerySchema = z
   .object({
     mediaId: z.string().min(1).optional(),
     tmdbId: z.string().min(1).optional(),
@@ -18,4 +18,6 @@ export const movieLookupQuerySchema = z
     }
   });
 
-export type MovieLookupQuery = z.infer<typeof movieLookupQuerySchema>;
+export type MediaLookupQuery = z.infer<typeof mediaLookupQuerySchema>;
+export const movieLookupQuerySchema = mediaLookupQuerySchema;
+export const tvLookupQuerySchema = mediaLookupQuerySchema;

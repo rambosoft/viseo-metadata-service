@@ -1,16 +1,12 @@
 import { z } from "zod";
 
-export const cachedMediaRecordSchema = z.object({
+const cachedBaseMediaRecordSchema = z.object({
   mediaId: z.string(),
   tenantId: z.string(),
-  kind: z.literal("movie"),
   canonicalTitle: z.string(),
   originalTitle: z.string().optional(),
   description: z.string().optional(),
   genres: z.array(z.string()),
-  releaseDate: z.string().optional(),
-  releaseYear: z.number().int().optional(),
-  runtimeMinutes: z.number().int().optional(),
   rating: z.number().optional(),
   cast: z.array(
     z.object({
@@ -47,6 +43,27 @@ export const cachedMediaRecordSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string()
 });
+
+const cachedMovieMediaRecordSchema = cachedBaseMediaRecordSchema.extend({
+  kind: z.literal("movie"),
+  releaseDate: z.string().optional(),
+  releaseYear: z.number().int().optional(),
+  runtimeMinutes: z.number().int().optional()
+});
+
+const cachedTvMediaRecordSchema = cachedBaseMediaRecordSchema.extend({
+  kind: z.literal("tv"),
+  firstAirDate: z.string().optional(),
+  firstAirYear: z.number().int().optional(),
+  seasonCount: z.number().int().optional(),
+  episodeCount: z.number().int().optional(),
+  status: z.string().optional()
+});
+
+export const cachedMediaRecordSchema = z.discriminatedUnion("kind", [
+  cachedMovieMediaRecordSchema,
+  cachedTvMediaRecordSchema
+]);
 
 export const cachedAuthContextSchema = z.object({
   principalId: z.string(),

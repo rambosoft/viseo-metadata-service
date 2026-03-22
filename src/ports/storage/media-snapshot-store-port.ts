@@ -1,16 +1,17 @@
-import type { MediaRecord, TenantId } from "../../core/media/types.js";
+import type { MediaKind, MediaRecord, TenantId } from "../../core/media/types.js";
 import type { LookupIdentifier } from "../providers/metadata-provider-port.js";
 
-export type CachedMovieLookup = Readonly<{
+export type CachedMediaLookup = Readonly<{
   record: MediaRecord;
   source: "cache";
 }>;
 
 export interface MediaSnapshotStorePort {
-  getMovieLookup(
+  getLookup(
     tenantId: TenantId,
+    kind: MediaKind,
     identifier: LookupIdentifier,
-  ): Promise<CachedMovieLookup | null>;
-  putMovieSnapshot(record: MediaRecord): Promise<void>;
+  ): Promise<CachedMediaLookup | null>;
+  putSnapshot(record: MediaRecord): Promise<void>;
   isHealthy(): Promise<boolean>;
 }

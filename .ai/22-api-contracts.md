@@ -11,15 +11,15 @@
 ## Authenticated Endpoints
 
 - `Confirmed`: `GET /api/v1/media/movie`
-- `Confirmed`: `GET /api/v1/media/tv-show`
-- `Confirmed`: `GET /api/v1/media/search`
+- `Confirmed`: `GET /api/v1/media/tv`
+- `Proposed`: `GET /api/v1/media/search`
 
 ## Operational Endpoints
 
 - `Confirmed`: `GET /health/live`
 - `Confirmed`: `GET /health/ready`
 - `Confirmed`: `GET /openapi.json`
-- `Confirmed`: `GET /docs`
+- `Proposed`: `GET /docs`
 
 ## Lookup Rules
 
@@ -45,7 +45,7 @@
   "meta": {
     "requestId": "req_123",
     "tenantId": "ten_123",
-    "source": "redis",
+    "source": "cache",
     "stale": false
   }
 }

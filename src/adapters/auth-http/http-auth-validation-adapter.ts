@@ -3,7 +3,7 @@ import type { Redis as RedisClient } from "ioredis";
 import { AuthenticationError, DependencyUnavailableError } from "../../core/shared/errors.js";
 import type { AuthContext } from "../../core/auth/types.js";
 import type { AuthValidationPort } from "../../ports/auth/auth-validation-port.js";
-import { toTenantId } from "../../application/lookup/movie-lookup-helpers.js";
+import { toTenantId } from "../../application/lookup/media-lookup-helpers.js";
 import { RedisKeyBuilder } from "../redis-store/redis-key-builder.js";
 import { cachedAuthContextSchema } from "../redis-store/redis-schemas.js";
 

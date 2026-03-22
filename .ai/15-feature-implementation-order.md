@@ -28,5 +28,7 @@
 ## Sequencing Rules
 
 - `Confirmed`: Build the movie lookup path as the first full vertical slice.
+- `Confirmed`: Movie lookup and TV lookup are now the implemented parity baseline.
+- `Confirmed`: The next delivery slice is search snapshots, local fetched-record indexing, and the search endpoint contract.
 - `Confirmed`: Do not build `channel` endpoints in MVP.
 - `Confirmed`: Do not add new providers before TMDB and the IMDb-compatible path are stable.

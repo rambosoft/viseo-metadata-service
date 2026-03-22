@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildContentHash, computeFreshness } from "../../src/application/lookup/movie-lookup-helpers.js";
+import {
+  buildContentHash,
+  buildMediaId,
+  computeFreshness,
+} from "../../src/application/lookup/media-lookup-helpers.js";
 import type { ClockPort } from "../../src/ports/shared/clock-port.js";
 
 const fixedClock: ClockPort = {
@@ -18,5 +22,12 @@ describe("movie lookup helpers", () => {
     const freshness = computeFreshness(fixedClock, 3600);
     expect(freshness.cacheTtlSeconds).toBe(3600);
     expect(freshness.lastFetchedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("builds different media ids for movie and tv lookups", () => {
+    const movieId = buildMediaId("tmdb", "movie", { type: "tmdbId", value: "550" });
+    const tvId = buildMediaId("tmdb", "tv", { type: "tmdbId", value: "550" });
+
+    expect(movieId).not.toBe(tvId);
   });
 });

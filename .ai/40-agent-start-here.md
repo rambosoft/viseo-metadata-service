@@ -20,10 +20,12 @@
 8. `.ai/15-feature-implementation-order.md`
 9. `.ai/41-agent-task-execution-rules.md`
 
-## First Delivery Slice
+## Current Baseline
 
 - `Confirmed`: Build the movie lookup path first.
 - `Confirmed`: Include config, auth boundary, Redis snapshot flow, TMDB adapter, route contract, and tests.
+- `Confirmed`: Movie and TV lookup parity are now implemented.
+- `Confirmed`: The next implementation target is search flow, cached query snapshots, and local fetched-record indexing.
 
 ## Non-Negotiable Rules
 

@@ -4,6 +4,7 @@ import type { ClockPort } from "../../ports/shared/clock-port.js";
 import type {
   LocaleCode,
   MediaId,
+  MediaKind,
   MediaRecord,
   TenantId,
 } from "../../core/media/types.js";
@@ -30,9 +31,10 @@ export function buildContentHash(value: unknown): string {
 
 export function buildMediaId(
   provider: ProviderLookupResult["provider"],
+  kind: MediaKind,
   identifier: LookupIdentifier,
 ): MediaId {
-  const seed = `${provider}:${identifier.type}:${identifier.value}`;
+  const seed = `${provider}:${kind}:${identifier.type}:${identifier.value}`;
   return `med_${createHash("sha256").update(seed).digest("hex").slice(0, 16)}` as MediaId;
 }
 

@@ -5,12 +5,13 @@
   "description": "Redis-first metadata service first vertical slice",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "build": "swc src -d dist --config-file .swcrc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:redis": "vitest run tests/integration/real-redis.integration.test.ts",
     "test:watch": "vitest",
     "start": "node dist/main.js"
   },
@@ -24,7 +25,7 @@
     "@swc/cli": "^0.5.0",
     "@swc/core": "^1.7.14",
     "@types/express": "^5.0.0",
-    "@types/node": "^22.10.2",
+    "@types/node": "^24.0.0",
     "@types/supertest": "^6.0.3",
     "ioredis-mock": "^8.9.0",
     "supertest": "^7.0.0",
